@@ -77,10 +77,7 @@ export default function StorePage() {
   return (
     <>
       <header className="app-header">
-        <div className="brandbox">
-          <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
-          <span className="sub">Contagem de estoque</span>
-        </div>
+        <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
         <div className="spacer" />
         <Link className="header-link" href="/admin">
           Admin

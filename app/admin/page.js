@@ -168,10 +168,7 @@ export default function AdminPage() {
     return (
       <>
         <header className="app-header">
-          <div className="brandbox">
-            <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
-            <span className="sub">Área do administrador</span>
-          </div>
+          <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
           <div className="spacer" />
           <Link className="header-link" href="/">
             Voltar
@@ -210,10 +207,7 @@ export default function AdminPage() {
   return (
     <>
       <header className="app-header">
-        <div className="brandbox">
-          <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
-          <span className="sub">Painel do administrador</span>
-        </div>
+        <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
         <div className="spacer" />
         <button className="header-link" onClick={logout}>
           Sair
