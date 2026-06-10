@@ -77,9 +77,8 @@ export default function StorePage() {
   return (
     <>
       <header className="app-header">
-        <div className="mark">🥥</div>
-        <div className="titles">
-          <span className="brand">Cosechas</span>
+        <div className="brandbox">
+          <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
           <span className="sub">Contagem de estoque</span>
         </div>
         <div className="spacer" />

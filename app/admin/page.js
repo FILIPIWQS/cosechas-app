@@ -168,9 +168,8 @@ export default function AdminPage() {
     return (
       <>
         <header className="app-header">
-          <div className="mark">🔒</div>
-          <div className="titles">
-            <span className="brand">Cosechas</span>
+          <div className="brandbox">
+            <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
             <span className="sub">Área do administrador</span>
           </div>
           <div className="spacer" />
@@ -211,9 +210,8 @@ export default function AdminPage() {
   return (
     <>
       <header className="app-header">
-        <div className="mark">🥥</div>
-        <div className="titles">
-          <span className="brand">Cosechas</span>
+        <div className="brandbox">
+          <img className="logo-img" src="/logo-cosechas.png" alt="Cosechas" />
           <span className="sub">Painel do administrador</span>
         </div>
         <div className="spacer" />
