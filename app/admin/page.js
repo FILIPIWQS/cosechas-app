@@ -16,14 +16,19 @@ export default function AdminPage() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  // formulário de novo produto
+  // novo produto
   const [newName, setNewName] = useState('');
   const [newUnit, setNewUnit] = useState('');
   const [newPar, setNewPar] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [newImage, setNewImage] = useState('');
 
-  // tenta reusar senha salva na sessão
+  // edição de produto
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '' });
+
   useEffect(() => {
     const saved = sessionStorage.getItem('cosechas_admin_pw');
     if (saved) {
@@ -31,7 +36,7 @@ export default function AdminPage() {
         if (code === 'ok') {
           setPassword(saved);
           setAuthed(true);
-          loadProducts(saved);
+          loadProducts();
         } else {
           sessionStorage.removeItem('cosechas_admin_pw');
         }
@@ -42,7 +47,6 @@ export default function AdminPage() {
     }
   }, []);
 
-  // retorna: 'ok' | 'bad' | 'noenv' | 'neterr'
   async function verify(pw) {
     try {
       const res = await fetch('/api/verify', {
@@ -65,7 +69,7 @@ export default function AdminPage() {
       setPassword(pwInput);
       setAuthed(true);
       sessionStorage.setItem('cosechas_admin_pw', pwInput);
-      loadProducts(pwInput);
+      loadProducts();
     } else if (code === 'noenv') {
       setLoginError('A senha de admin não foi definida no servidor (variável ADMIN_PASSWORD).');
     } else if (code === 'neterr') {
@@ -100,6 +104,10 @@ export default function AdminPage() {
     return { 'Content-Type': 'application/json', 'x-admin-password': password };
   }
 
+  function updateLocal(id, patch) {
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
   async function addProduct(e) {
     e.preventDefault();
     const name = newName.trim();
@@ -107,7 +115,12 @@ export default function AdminPage() {
     const res = await fetch('/api/products', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ name, unit: newUnit.trim(), par: Number(newPar) || 0 }),
+      body: JSON.stringify({
+        name,
+        unit: newUnit.trim(),
+        par: Number(newPar) || 0,
+        image: newImage.trim(),
+      }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -115,11 +128,8 @@ export default function AdminPage() {
       setNewName('');
       setNewUnit('');
       setNewPar('');
+      setNewImage('');
     }
-  }
-
-  function updateLocal(id, patch) {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
 
   async function updatePar(id, par) {
@@ -133,10 +143,40 @@ export default function AdminPage() {
     });
   }
 
+  function startEdit(p) {
+    setEditingId(p.id);
+    setEditData({
+      name: p.name || '',
+      unit: p.unit || '',
+      image: p.image || '',
+      par: String(Number(p.par) || 0),
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(id) {
+    const name = editData.name.trim();
+    if (!name) return;
+    const par = Math.max(0, Number(editData.par) || 0);
+    const unit = editData.unit.trim();
+    const image = editData.image.trim();
+    updateLocal(id, { name, unit, image, par });
+    setEditingId(null);
+    await fetch('/api/products', {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ id, name, unit, image, par }),
+    });
+  }
+
   async function removeProduct(id) {
     const p = products.find((x) => x.id === id);
-    if (!confirm(`Remover "${p?.name}"? Essa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Excluir "${p?.name}"? Essa ação não pode ser desfeita.`)) return;
     setProducts((prev) => prev.filter((x) => x.id !== id));
+    if (editingId === id) setEditingId(null);
     await fetch(`/api/products?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: { 'x-admin-password': password },
@@ -202,7 +242,14 @@ export default function AdminPage() {
   }
 
   // ---------- PAINEL ----------
-  const toBuyCount = products.filter((p) => buyQty(p) > 0).length;
+  const toBuy = products
+    .filter((p) => buyQty(p) > 0)
+    .sort((a, b) => buyQty(b) - buyQty(a) || a.name.localeCompare(b.name, 'pt'));
+
+  const visible = products
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+    .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <>
@@ -224,16 +271,14 @@ export default function AdminPage() {
               <div className="report-head">
                 <h2>Lista de reposição</h2>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {toBuyCount > 0 ? (
-                    <span className="count-pill">{toBuyCount} item(ns)</span>
-                  ) : null}
-                  <button className="btn btn-citrus btn-sm" onClick={copyList} disabled={toBuyCount === 0}>
+                  {toBuy.length > 0 ? <span className="count-pill">{toBuy.length} item(ns)</span> : null}
+                  <button className="btn btn-citrus btn-sm" onClick={copyList} disabled={toBuy.length === 0}>
                     {copied ? '✓ Copiado' : 'Copiar lista'}
                   </button>
                 </div>
               </div>
-              {products.length === 0 ? (
-                <div className="empty">Cadastre produtos abaixo para ver o que comprar.</div>
+              {toBuy.length === 0 ? (
+                <div className="empty">Tudo abastecido 🎉 (nada a comprar no momento)</div>
               ) : (
                 <table>
                   <thead>
@@ -245,28 +290,25 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map((p) => {
-                      const q = buyQty(p);
-                      return (
-                        <tr key={p.id} className={q > 0 ? 'row-go' : ''}>
-                          <td>
-                            {p.name}
-                            {p.unit ? <span style={{ color: 'var(--muted)' }}> · {p.unit}</span> : null}
-                          </td>
-                          <td className="num">{Number(p.count) || 0}</td>
-                          <td className="num">{Number(p.par) || 0}</td>
-                          <td className="num">
-                            <span className={'buy-qty ' + (q > 0 ? 'go' : 'ok')}>{q > 0 ? q : '—'}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {toBuy.map((p) => (
+                      <tr key={p.id} className="row-go">
+                        <td>
+                          {p.name}
+                          {p.unit ? <span style={{ color: 'var(--muted)' }}> · {p.unit}</span> : null}
+                        </td>
+                        <td className="num">{Number(p.count) || 0}</td>
+                        <td className="num">{Number(p.par) || 0}</td>
+                        <td className="num">
+                          <span className="buy-qty go">{buyQty(p)}</span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
             </div>
 
-            <div className="section-title">Produtos e estoque regulador</div>
+            <div className="section-title">Gerenciar produtos</div>
 
             <div className="toolbar">
               <button className="btn btn-ghost btn-sm" onClick={loadProducts}>
@@ -306,35 +348,112 @@ export default function AdminPage() {
                   onChange={(e) => setNewPar(e.target.value)}
                 />
               </div>
+              <div className="field field-image">
+                <label>URL da foto (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="https://… ou /img/arquivo.jpg"
+                  value={newImage}
+                  onChange={(e) => setNewImage(e.target.value)}
+                />
+              </div>
               <button className="btn btn-primary" type="submit">
                 Adicionar
               </button>
             </form>
 
-            {products.map((p) => (
-              <div className="padmin" key={p.id}>
-                <div className="info">
-                  <div className="pname">{p.name}</div>
-                  <div className="punit">
-                    {p.unit ? p.unit + ' · ' : ''}contado: {Number(p.count) || 0}
+            <input
+              className="search"
+              type="search"
+              placeholder={`🔍 Buscar entre ${products.length} produtos…`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            {visible.map((p) =>
+              editingId === p.id ? (
+                <div className="padmin editing" key={p.id}>
+                  <div className="edit-grid">
+                    <div className="field field-full">
+                      <label>Descrição</label>
+                      <input
+                        type="text"
+                        value={editData.name}
+                        onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Unidade</label>
+                      <input
+                        type="text"
+                        value={editData.unit}
+                        onChange={(e) => setEditData({ ...editData, unit: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Regulador</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editData.par}
+                        onChange={(e) => setEditData({ ...editData, par: e.target.value })}
+                      />
+                    </div>
+                    <div className="field field-full">
+                      <label>URL da foto</label>
+                      <input
+                        type="text"
+                        placeholder="https://… ou /img/arquivo.jpg"
+                        value={editData.image}
+                        onChange={(e) => setEditData({ ...editData, image: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="edit-actions">
+                    <button className="btn btn-primary btn-sm" onClick={() => saveEdit(p.id)}>
+                      Salvar
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={cancelEdit}>
+                      Cancelar
+                    </button>
                   </div>
                 </div>
-                <div className="par-edit">
-                  <label htmlFor={`par-${p.id}`}>Regulador</label>
-                  <input
-                    id={`par-${p.id}`}
-                    className="par-input"
-                    type="number"
-                    min="0"
-                    defaultValue={Number(p.par) || 0}
-                    onBlur={(e) => updatePar(p.id, e.target.value)}
-                  />
+              ) : (
+                <div className="padmin" key={p.id}>
+                  {p.image ? <img className="thumb thumb-sm" src={p.image} alt="" /> : null}
+                  <div className="info">
+                    <div className="pname">{p.name}</div>
+                    <div className="punit">
+                      {p.unit ? p.unit + ' · ' : ''}contado: {Number(p.count) || 0}
+                    </div>
+                  </div>
+                  <div className="par-edit">
+                    <label htmlFor={`par-${p.id}`}>Regulador</label>
+                    <input
+                      id={`par-${p.id}`}
+                      className="par-input"
+                      type="number"
+                      min="0"
+                      defaultValue={Number(p.par) || 0}
+                      key={`par-${p.id}-${p.par}`}
+                      onBlur={(e) => updatePar(p.id, e.target.value)}
+                    />
+                  </div>
+                  <div className="row-actions">
+                    <button className="btn btn-edit btn-sm" onClick={() => startEdit(p)}>
+                      Editar
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => removeProduct(p.id)}>
+                      Excluir
+                    </button>
+                  </div>
                 </div>
-                <button className="btn btn-danger btn-sm" onClick={() => removeProduct(p.id)}>
-                  Remover
-                </button>
-              </div>
-            ))}
+              )
+            )}
+
+            {visible.length === 0 ? (
+              <div className="empty">Nenhum produto encontrado para "{search}".</div>
+            ) : null}
 
             <div className="foot-link">
               <Link href="/">← Ir para a tela de contagem</Link>

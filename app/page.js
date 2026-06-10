@@ -8,6 +8,7 @@ export default function StorePage() {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState('ok'); // ok | db | error
   const [savedId, setSavedId] = useState(null);
+  const [search, setSearch] = useState('');
   const timers = useRef({});
 
   useEffect(() => {
@@ -110,8 +111,20 @@ export default function StorePage() {
             <p className="intro">
               Conte cada produto e digite a quantidade. Tudo é salvo automaticamente.
             </p>
-            {products.map((p) => (
+            <input
+              className="search"
+              type="search"
+              placeholder="🔍 Buscar produto…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {products
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+              .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+              .map((p) => (
               <div className="product" key={p.id}>
+                {p.image ? <img className="thumb" src={p.image} alt="" /> : null}
                 <div className="info">
                   <div className="pname">{p.name}</div>
                   {p.unit ? <div className="punit">Unidade: {p.unit}</div> : null}
