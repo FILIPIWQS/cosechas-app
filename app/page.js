@@ -157,8 +157,7 @@ export default function StorePage() {
   function onInput(id, value) {
     let count = parseInt(value, 10);
     if (Number.isNaN(count) || count < 0) count = 0;
-    updateLocal(id, count);
-    queueSave(id, count);
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, count } : p));
   }
 
   function step(id, delta) {
@@ -166,8 +165,7 @@ export default function StorePage() {
     if (!p) return;
     let count = (Number(p.count) || 0) + delta;
     if (count < 0) count = 0;
-    updateLocal(id, count);
-    queueSave(id, count);
+    setProducts((prev) => prev.map((x) => x.id === id ? { ...x, count } : x));
   }
 
   async function enableNotifications() {
@@ -342,7 +340,7 @@ export default function StorePage() {
                       type="number"
                       inputMode="numeric"
                       min="0"
-                      value={p.countedToday ? String(Number(p.count) || 0) : ''}
+                      value={p.count > 0 || p.countedToday ? String(Number(p.count) || 0) : ''}
                       placeholder="–"
                       onChange={(e) => onInput(p.id, e.target.value)}
                       onFocus={(e) => e.target.select()}
