@@ -77,7 +77,7 @@ export default function StorePage() {
     // eslint-disable-next-line
   }, []);
 
-  // Lembrete a cada 2 minutos se a contagem não terminou
+  // Lembrete a cada 5 minutos se a contagem não terminou
   useEffect(() => {
     const iv = setInterval(() => {
       const pending = productsRef.current.filter((p) => !p.countedToday).length;
@@ -95,7 +95,7 @@ export default function StorePage() {
           } catch (e) {}
         }
       }
-    }, 2 * 60 * 1000);
+    }, 5 * 60 * 1000);
     return () => clearInterval(iv);
   }, []);
 
@@ -271,7 +271,7 @@ export default function StorePage() {
                 <div className="reminder-title">🚨 CONTAGEM PENDENTE!</div>
                 <div className="reminder-body">
                   Faltam <strong>{pendingAll} produto{pendingAll > 1 ? 's' : ''}</strong> para contar hoje.
-                  Este aviso repete a cada <strong>2 minutos</strong>.
+                  Este aviso repete a cada <strong>5 minutos</strong>.
                 </div>
               </div>
             ) : null}
@@ -299,7 +299,7 @@ export default function StorePage() {
                   🔕 Notificações bloqueadas pelo navegador. Clique no cadeado na barra de endereço → Permissões → Notificações → Permitir.
                 </div>
               ) : notifPerm === 'granted' ? (
-                <div className="notif-hint ok">🔔 Notificações ativadas — você receberá alertas a cada 2 min.</div>
+                <div className="notif-hint ok">🔔 Notificações ativadas — você receberá alertas a cada 5 min.</div>
               ) : null}
             </div>
 
