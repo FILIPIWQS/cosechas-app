@@ -319,6 +319,7 @@ tr:last-child td { border-bottom: none; }
 }
 .name-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
 .name-saved { color: var(--green-600); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.name-required { margin-top: 8px; font-size: 13px; font-weight: 800; color: var(--brand); }
 .notif-btn { margin-top: 10px; }
 .notif-hint { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 .notif-hint.ok { color: var(--green-600); }

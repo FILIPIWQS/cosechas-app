@@ -65,8 +65,15 @@ export default function StorePage() {
 
   useEffect(() => {
     try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const saved = localStorage.getItem('cosechas_collaborator');
-      if (saved) setCollaborator(saved);
+      const savedDate = localStorage.getItem('cosechas_collaborator_date');
+      if (saved && savedDate === today) {
+        setCollaborator(saved);
+      } else {
+        localStorage.removeItem('cosechas_collaborator');
+        localStorage.removeItem('cosechas_collaborator_date');
+      }
     } catch (e) {}
     if (typeof Notification !== 'undefined') setNotifPerm(Notification.permission);
     else setNotifPerm('unsupported');
@@ -94,7 +101,7 @@ export default function StorePage() {
           } catch (e) {}
         }
       }
-    }, 10 * 1000); // TESTE — voltar para 5 * 60 * 1000
+    }, 5 * 60 * 1000);
     return () => clearInterval(iv);
   }, []);
 
@@ -155,7 +162,9 @@ export default function StorePage() {
   function onNameChange(value) {
     setCollaborator(value);
     try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       localStorage.setItem('cosechas_collaborator', value);
+      localStorage.setItem('cosechas_collaborator_date', today);
     } catch (e) {}
     setNameSaved(true);
     setTimeout(() => setNameSaved(false), 1400);
@@ -289,6 +298,9 @@ export default function StorePage() {
                 />
                 {nameSaved ? <span className="name-saved">✓ Salvo</span> : null}
               </div>
+              {!collaborator.trim() ? (
+                <div className="name-required">⚠️ Preencha seu nome para iniciar a contagem</div>
+              ) : null}
               {notifPerm === 'default' ? (
                 <button className="btn btn-ghost-dark btn-sm notif-btn" onClick={enableNotifications}>
                   🔔 Ativar notificações do navegador (obrigatório para pop-up)
@@ -379,7 +391,7 @@ export default function StorePage() {
                     </div>
                   </div>
                   <div className="stepper">
-                    <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)} disabled={p.countedToday}>
+                    <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)} disabled={p.countedToday || !collaborator.trim()}>
                       −
                     </button>
                     <input
@@ -391,15 +403,16 @@ export default function StorePage() {
                       placeholder="–"
                       onChange={(e) => onInput(p.id, e.target.value)}
                       onFocus={(e) => e.target.select()}
-                      disabled={p.countedToday}
+                      disabled={p.countedToday || !collaborator.trim()}
                     />
-                    <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)} disabled={p.countedToday}>
+                    <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)} disabled={p.countedToday || !collaborator.trim()}>
                       +
                     </button>
                     <button
                       className={'step-btn confirm-btn' + (p.countedToday ? ' confirmed' : '')}
                       aria-label={p.countedToday ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
                       onClick={() => toggleConfirm(p.id)}
+                      disabled={!collaborator.trim() && !p.countedToday}
                     >
                       ✓
                     </button>
