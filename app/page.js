@@ -95,7 +95,7 @@ export default function StorePage() {
           } catch (e) {}
         }
       }
-    }, 5 * 60 * 1000);
+    }, 10 * 1000); // TESTE — voltar para 5 * 60 * 1000
     return () => clearInterval(iv);
   }, []);
 
