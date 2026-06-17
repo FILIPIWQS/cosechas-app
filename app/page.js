@@ -34,34 +34,6 @@ function playAlert() {
   } catch (e) {}
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
-}
-
-async function subscribeToPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!vapidKey) return;
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      });
-    }
-    await fetch('/api/push-subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(sub),
-    });
-  } catch (e) {}
-}
-
 function formatDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -98,10 +70,6 @@ export default function StorePage() {
     } catch (e) {}
     if (typeof Notification !== 'undefined') setNotifPerm(Notification.permission);
     else setNotifPerm('unsupported');
-    // Registra Service Worker para notificações em segundo plano
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
     load();
     const t = timers.current;
     return () => Object.values(t).forEach((id) => clearTimeout(id));
@@ -252,7 +220,6 @@ export default function StorePage() {
     try {
       const perm = await Notification.requestPermission();
       setNotifPerm(perm);
-      if (perm === 'granted') await subscribeToPush();
     } catch (e) {}
   }
 
