@@ -266,3 +266,94 @@ tr:last-child td { border-bottom: none; }
   .step-btn { width: 40px; height: 40px; }
   .logo-img { height: 30px; }
 }
+
+/* ===== Recursos de contagem (v7) ===== */
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.panel-label {
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted);
+}
+
+.reminder {
+  position: relative;
+  background: #2b0a14;
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 16px 42px 16px 18px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.reminder-title { font-weight: 800; font-family: var(--font-display); margin-bottom: 4px; }
+.reminder-body { font-size: 14px; opacity: 0.92; }
+.reminder-x {
+  position: absolute; top: 8px; right: 12px;
+  background: transparent; border: none; color: #fff;
+  font-size: 24px; line-height: 1; opacity: 0.8; cursor: pointer;
+}
+.reminder-x:hover { opacity: 1; }
+
+.name-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.name-icon { font-size: 18px; }
+.name-input {
+  flex: 1; height: 44px; border: 1px solid var(--line);
+  border-radius: 12px; padding: 0 14px; font-size: 15px; font-weight: 700; background: #fff;
+}
+.name-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+.name-saved { color: var(--green-600); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.notif-btn { margin-top: 10px; }
+.notif-hint { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.notif-hint.ok { color: var(--green-600); }
+.btn-ghost-dark { background: var(--brand-050); border: 1px solid var(--brand-100); color: var(--brand); }
+.btn-ghost-dark:hover { background: var(--brand-100); }
+
+.progress-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 0 8px; gap: 8px; }
+.progress-count {
+  font-family: var(--font-display); font-weight: 800; font-size: 14px;
+  color: var(--brand); background: var(--brand-050); padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.progress-count.done { color: var(--green-600); background: var(--green-050); }
+.progress-bar { height: 10px; background: #f0e6ea; border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--brand); border-radius: 999px; transition: width 0.3s; }
+.progress-fill.done { background: var(--green); }
+.progress-hint { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+.date-bar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;
+  background: rgba(255, 255, 255, 0.16); color: #fff; border-radius: 12px;
+  padding: 10px 14px; margin-bottom: 14px; font-size: 13.5px;
+}
+.date-note { font-size: 12px; opacity: 0.85; }
+
+.pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.pill {
+  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff; font-weight: 800; font-size: 13px; font-family: var(--font-display);
+  padding: 7px 14px; border-radius: 999px;
+}
+.pill.active { background: #fff; color: var(--brand); border-color: #fff; }
+
+.prow { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.freq-tag {
+  display: inline-block; font-size: 10.5px; font-weight: 800; padding: 2px 8px;
+  border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.freq-diaria { background: #fde4ec; color: #c2185b; }
+.freq-semanal { background: #e3f1d8; color: #5f9a14; }
+.freq-quinzenal { background: #e0eefb; color: #2563a8; }
+.freq-mensal { background: #efe3fb; color: #7a3fb0; }
+.counted-tag { font-size: 11px; font-weight: 800; color: var(--green-600); }
+.tocount-tag { font-size: 11px; font-weight: 700; color: var(--muted); }
+
+.product.counted { border-left: 4px solid var(--green); }
+
+.freq-select {
+  width: 100%; height: 44px; border: 1px solid var(--line);
+  border-radius: 12px; padding: 0 10px; font-size: 15px; background: #fff;
+}
+.edit-grid .freq-select { height: 42px; }
