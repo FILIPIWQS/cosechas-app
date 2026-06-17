@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
+const FREQ_LABEL = { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' };
+function freqOf(p) {
+  return FREQS.includes(p.frequency) ? p.frequency : 'diaria';
+}
+
 function buyQty(p) {
   return Math.max(0, (Number(p.par) || 0) - (Number(p.count) || 0));
 }
@@ -24,10 +30,16 @@ export default function AdminPage() {
   const [newUnit, setNewUnit] = useState('');
   const [newPar, setNewPar] = useState('');
   const [newImage, setNewImage] = useState('');
+  const [newFreq, setNewFreq] = useState('diaria');
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '' });
+  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '', frequency: 'diaria' });
+
+  // histórico de contagens
+  const [logs, setLogs] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('cosechas_admin_pw');
@@ -120,6 +132,7 @@ export default function AdminPage() {
         unit: newUnit.trim(),
         par: Number(newPar) || 0,
         image: newImage.trim(),
+        frequency: newFreq,
       }),
     });
     if (res.ok) {
@@ -129,6 +142,7 @@ export default function AdminPage() {
       setNewUnit('');
       setNewPar('');
       setNewImage('');
+      setNewFreq('diaria');
     }
   }
 
@@ -150,6 +164,7 @@ export default function AdminPage() {
       unit: p.unit || '',
       image: p.image || '',
       par: String(Number(p.par) || 0),
+      frequency: p.frequency || 'diaria',
     });
   }
 
@@ -163,12 +178,13 @@ export default function AdminPage() {
     const par = Math.max(0, Number(editData.par) || 0);
     const unit = editData.unit.trim();
     const image = editData.image.trim();
-    updateLocal(id, { name, unit, image, par });
+    const frequency = editData.frequency || 'diaria';
+    updateLocal(id, { name, unit, image, par, frequency });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, unit, image, par }),
+      body: JSON.stringify({ id, name, unit, image, par, frequency }),
     });
   }
 
@@ -190,6 +206,26 @@ export default function AdminPage() {
       headers: { 'x-admin-password': password },
     });
     if (res.ok) setProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
+  }
+
+  async function loadLogs() {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch('/api/logs', { headers: { 'x-admin-password': password }, cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch (e) {
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  function toggleHistory() {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (next) loadLogs();
   }
 
   function copyList() {
@@ -348,6 +384,14 @@ export default function AdminPage() {
                   onChange={(e) => setNewPar(e.target.value)}
                 />
               </div>
+              <div className="field">
+                <label>Frequência</label>
+                <select className="freq-select" value={newFreq} onChange={(e) => setNewFreq(e.target.value)}>
+                  {FREQS.map((f) => (
+                    <option key={f} value={f}>{FREQ_LABEL[f]}</option>
+                  ))}
+                </select>
+              </div>
               <div className="field field-image">
                 <label>URL da foto (opcional)</label>
                 <input
@@ -399,6 +443,14 @@ export default function AdminPage() {
                         onChange={(e) => setEditData({ ...editData, par: e.target.value })}
                       />
                     </div>
+                    <div className="field">
+                      <label>Frequência</label>
+                      <select className="freq-select" value={editData.frequency} onChange={(e) => setEditData({ ...editData, frequency: e.target.value })}>
+                        {FREQS.map((f) => (
+                          <option key={f} value={f}>{FREQ_LABEL[f]}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="field field-full">
                       <label>URL da foto</label>
                       <input
@@ -424,7 +476,9 @@ export default function AdminPage() {
                   <div className="info">
                     <div className="pname">{p.name}</div>
                     <div className="punit">
-                      {p.unit ? p.unit + ' · ' : ''}contado: {Number(p.count) || 0}
+                      <span className={'freq-tag freq-' + freqOf(p)}>{FREQ_LABEL[freqOf(p)]}</span>
+                      {p.unit ? ' · ' + p.unit : ''} · contado: {Number(p.count) || 0}
+                      {p.lastBy ? ' · por ' + p.lastBy : ''}
                     </div>
                   </div>
                   <div className="par-edit">
@@ -453,6 +507,41 @@ export default function AdminPage() {
 
             {visible.length === 0 ? (
               <div className="empty">Nenhum produto encontrado para "{search}".</div>
+            ) : null}
+
+            <div className="section-title">Histórico de contagens</div>
+            <button className="btn btn-ghost btn-sm" onClick={toggleHistory}>
+              {historyOpen ? 'Ocultar histórico' : 'Ver histórico'}
+            </button>
+            {historyOpen ? (
+              <div className="report" style={{ marginTop: 12 }}>
+                {loadingLogs ? (
+                  <div className="empty">Carregando…</div>
+                ) : logs.length === 0 ? (
+                  <div className="empty">Nenhuma contagem registrada ainda.</div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Data/Hora</th>
+                        <th>Produto</th>
+                        <th>Quem</th>
+                        <th className="num">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((l) => (
+                        <tr key={l.id}>
+                          <td>{new Date(l.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
+                          <td>{l.productName}</td>
+                          <td>{l.by || '—'}</td>
+                          <td className="num">{l.next}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             ) : null}
 
             <div className="foot-link">
