@@ -352,6 +352,11 @@ tr:last-child td { border-bottom: none; }
 
 .product.counted { border-left: 4px solid var(--green); }
 
+.confirm-btn { border-color: #b7dea0; background: var(--green-050); color: var(--green-600); font-size: 18px; }
+.confirm-btn:hover { background: #dff5c6; }
+.confirm-btn.confirmed { background: var(--green); border-color: var(--green-600); color: #fff; }
+.confirm-btn.confirmed:hover { background: var(--green-600); }
+
 .freq-select {
   width: 100%; height: 44px; border: 1px solid var(--line);
   border-radius: 12px; padding: 0 10px; font-size: 15px; background: #fff;

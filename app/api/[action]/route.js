@@ -227,6 +227,7 @@ export async function POST(request, { params }) {
       const id = body.id;
       const count = Number(body.count);
       const by = String(body.by || '').trim().slice(0, 40);
+      const confirmed = body.confirmed !== false;
       if (!id) return Response.json({ error: 'id_required' }, { status: 400 });
       if (Number.isNaN(count) || count < 0) {
         return Response.json({ error: 'invalid_count' }, { status: 400 });
@@ -238,21 +239,23 @@ export async function POST(request, { params }) {
       if (idx === -1) return Response.json({ error: 'not_found' }, { status: 404 });
       const prev = Number(products[idx].count) || 0;
       products[idx].count = count;
-      products[idx].countedToday = true;
+      products[idx].countedToday = confirmed;
       products[idx].lastBy = by;
       products[idx].updatedAt = Date.now();
       await saveProducts(products);
-      const logs = await getLogs();
-      logs.unshift({
-        id: genId(),
-        productName: products[idx].name,
-        prev,
-        next: count,
-        by,
-        ts: Date.now(),
-        date: day.countDate,
-      });
-      await saveLogs(logs);
+      if (confirmed) {
+        const logs = await getLogs();
+        logs.unshift({
+          id: genId(),
+          productName: products[idx].name,
+          prev,
+          next: count,
+          by,
+          ts: Date.now(),
+          date: day.countDate,
+        });
+        await saveLogs(logs);
+      }
       return Response.json({ ok: true });
     } catch (e) {
       return Response.json({ error: 'count_failed' }, { status: 500 });

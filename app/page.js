@@ -125,16 +125,33 @@ export default function StorePage() {
     timers.current[id] = setTimeout(() => saveCount(id, count), 450);
   }
 
-  async function saveCount(id, count) {
+  async function saveCount(id, count, confirmed) {
     try {
+      const body = { id, count, by: collaborator };
+      if (confirmed === false) body.confirmed = false;
       await fetch('/api/count', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, count, by: collaborator }),
+        body: JSON.stringify(body),
       });
       setSavedId(id);
       setTimeout(() => setSavedId((s) => (s === id ? null : s)), 1400);
     } catch (e) {}
+  }
+
+  function toggleConfirm(id) {
+    const p = products.find((x) => x.id === id);
+    if (!p) return;
+    if (p.countedToday) {
+      setProducts((prev) => prev.map((x) => x.id === id ? { ...x, countedToday: false } : x));
+      clearTimeout(timers.current[id]);
+      saveCount(id, Number(p.count) || 0, false);
+    } else {
+      const count = Number(p.count) || 0;
+      updateLocal(id, count);
+      clearTimeout(timers.current[id]);
+      saveCount(id, count);
+    }
   }
 
   function onInput(id, value) {
@@ -266,7 +283,6 @@ export default function StorePage() {
               <span>
                 Contagem ativa da data: <strong>{formatDate(countDate)}</strong>
               </span>
-              <span className="date-note">Zera sozinho no próximo dia</span>
             </div>
 
             {/* Busca */}
@@ -326,12 +342,20 @@ export default function StorePage() {
                       type="number"
                       inputMode="numeric"
                       min="0"
-                      value={Number(p.count) || 0}
+                      value={p.countedToday ? String(Number(p.count) || 0) : ''}
+                      placeholder="–"
                       onChange={(e) => onInput(p.id, e.target.value)}
                       onFocus={(e) => e.target.select()}
                     />
                     <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)}>
                       +
+                    </button>
+                    <button
+                      className={'step-btn confirm-btn' + (p.countedToday ? ' confirmed' : '')}
+                      aria-label={p.countedToday ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
+                      onClick={() => toggleConfirm(p.id)}
+                    >
+                      ✓
                     </button>
                   </div>
                 </div>
