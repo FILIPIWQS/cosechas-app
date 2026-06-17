@@ -15,23 +15,22 @@ function playAlert() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
-    const beep = (t) => {
+    const beep = (t, freq) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.45, t + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.setValueAtTime(0, t + 0.17);
       osc.start(t);
-      osc.stop(t + 0.28);
+      osc.stop(t + 0.17);
     };
     const t = ctx.currentTime;
-    beep(t);
-    beep(t + 0.38);
-    beep(t + 0.76);
+    [0, 0.2, 0.4, 0.6, 0.8, 1.0].forEach((offset, i) => {
+      beep(t + offset, i % 2 === 0 ? 1040 : 784);
+    });
   } catch (e) {}
 }
 
