@@ -287,6 +287,11 @@ tr:last-child td { border-bottom: none; }
   letter-spacing: 0.05em; color: var(--muted);
 }
 
+@keyframes warn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 0, 60, 0.7); }
+  60% { box-shadow: 0 0 0 10px rgba(220, 0, 60, 0); }
+}
+
 .reminder {
   position: relative;
   background: #2b0a14;
@@ -296,6 +301,7 @@ tr:last-child td { border-bottom: none; }
   margin-bottom: 14px;
   box-shadow: var(--shadow);
 }
+.reminder-pulse { animation: warn-pulse 1.6s ease-out infinite; }
 .reminder-title { font-weight: 800; font-family: var(--font-display); margin-bottom: 4px; }
 .reminder-body { font-size: 14px; opacity: 0.92; }
 .reminder-x {
@@ -316,6 +322,7 @@ tr:last-child td { border-bottom: none; }
 .notif-btn { margin-top: 10px; }
 .notif-hint { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 .notif-hint.ok { color: var(--green-600); }
+.notif-blocked { color: #b9003c; font-weight: 700; }
 .btn-ghost-dark { background: var(--brand-050); border: 1px solid var(--brand-100); color: var(--brand); }
 .btn-ghost-dark:hover { background: var(--brand-100); }
 

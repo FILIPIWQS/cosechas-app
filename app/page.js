@@ -10,6 +10,31 @@ function freqOf(p) {
   return FREQS.includes(p.frequency) ? p.frequency : 'diaria';
 }
 
+function playAlert() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const beep = (t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.45, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.start(t);
+      osc.stop(t + 0.28);
+    };
+    const t = ctx.currentTime;
+    beep(t);
+    beep(t + 0.38);
+    beep(t + 0.76);
+  } catch (e) {}
+}
+
 function formatDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -52,23 +77,46 @@ export default function StorePage() {
     // eslint-disable-next-line
   }, []);
 
-  // Lembrete a cada 5 minutos se a contagem não terminou
+  // Lembrete a cada 2 minutos se a contagem não terminou
   useEffect(() => {
     const iv = setInterval(() => {
       const pending = productsRef.current.filter((p) => !p.countedToday).length;
       if (pending > 0) {
         setReminderOpen(true);
+        playAlert();
+        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           try {
-            new Notification('⚠️ Estoque pendente', {
-              body: `Faltam ${pending} produtos para contar hoje.`,
+            new Notification('⚠️ Estoque pendente – Cosechas', {
+              body: `Faltam ${pending} produto${pending > 1 ? 's' : ''} para contar hoje!`,
+              icon: '/logo-cosechas.png',
+              requireInteraction: true,
             });
           } catch (e) {}
         }
       }
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
     return () => clearInterval(iv);
   }, []);
+
+  // Título da aba muda quando há pendências
+  useEffect(() => {
+    if (loading || state !== 'ok') return;
+    const pendingAll = products.filter((p) => !p.countedToday).length;
+    if (pendingAll > 0) {
+      let blink = false;
+      const t = setInterval(() => {
+        blink = !blink;
+        document.title = blink
+          ? `⚠️ ${pendingAll} pendente${pendingAll > 1 ? 's' : ''} – Cosechas`
+          : 'Cosechas – contagem pendente';
+      }, 1200);
+      return () => { clearInterval(t); document.title = 'Cosechas'; };
+    } else {
+      document.title = '✓ Cosechas – tudo contado';
+    }
+  // eslint-disable-next-line
+  }, [products, loading, state]);
 
   // Atualiza ao voltar pra aba (pega virada de dia / outras contagens)
   useEffect(() => {
@@ -216,14 +264,14 @@ export default function StorePage() {
         ) : (
           <>
             {reminderOpen && pendingAll > 0 ? (
-              <div className="reminder">
+              <div className="reminder reminder-pulse">
                 <button className="reminder-x" onClick={() => setReminderOpen(false)} aria-label="Fechar">
                   ×
                 </button>
-                <div className="reminder-title">🚨 Estoque pendente! (lembrete de 5 min)</div>
+                <div className="reminder-title">🚨 CONTAGEM PENDENTE!</div>
                 <div className="reminder-body">
-                  A contagem de hoje ainda está incompleta. Faltam <strong>{pendingAll}</strong> produtos
-                  para contar.
+                  Faltam <strong>{pendingAll} produto{pendingAll > 1 ? 's' : ''}</strong> para contar hoje.
+                  Este aviso repete a cada <strong>2 minutos</strong>.
                 </div>
               </div>
             ) : null}
@@ -244,14 +292,14 @@ export default function StorePage() {
               </div>
               {notifPerm === 'default' ? (
                 <button className="btn btn-ghost-dark btn-sm notif-btn" onClick={enableNotifications}>
-                  🔔 Ativar lembretes neste dispositivo
+                  🔔 Ativar notificações do navegador (obrigatório para pop-up)
                 </button>
               ) : notifPerm === 'denied' ? (
-                <div className="notif-hint">
-                  🔕 Notificações bloqueadas. Ative nas permissões do site para receber lembretes.
+                <div className="notif-hint notif-blocked">
+                  🔕 Notificações bloqueadas pelo navegador. Clique no cadeado na barra de endereço → Permissões → Notificações → Permitir.
                 </div>
               ) : notifPerm === 'granted' ? (
-                <div className="notif-hint ok">🔔 Lembretes ativados.</div>
+                <div className="notif-hint ok">🔔 Notificações ativadas — você receberá alertas a cada 2 min.</div>
               ) : null}
             </div>
 
