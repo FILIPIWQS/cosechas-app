@@ -365,6 +365,11 @@ export default function StorePage() {
             <div className="foot-link">
               <Link href="/admin">Área do administrador →</Link>
             </div>
+
+            <footer className="footer">
+              <p className="footer-brand">© SIEMBRAS — TODOS OS DIREITOS RESERVADOS</p>
+              <p className="footer-dev">Desenvolvido por <strong>Filipi Fernandes</strong></p>
+            </footer>
           </>
         )}
       </main>

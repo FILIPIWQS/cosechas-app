@@ -258,6 +258,11 @@ tr:last-child td { border-bottom: none; }
 .foot-link a { color: #fff; font-weight: 800; text-decoration: none; font-size: 14px; opacity: 0.95; }
 .foot-link a:hover { text-decoration: underline; }
 
+.footer { text-align: center; margin-top: 32px; padding: 18px 0 8px; border-top: 1px solid rgba(255,255,255,0.18); }
+.footer-brand { color: rgba(255,255,255,0.75); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 4px; }
+.footer-dev { color: rgba(255,255,255,0.6); font-size: 12px; margin: 0; }
+.footer-dev strong { color: rgba(255,255,255,0.85); }
+
 @media (max-width: 560px) {
   .add-form { grid-template-columns: 1fr 1fr; }
   .add-form .field-name { grid-column: 1 / -1; }
