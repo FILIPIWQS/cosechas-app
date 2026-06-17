@@ -332,7 +332,7 @@ export default function StorePage() {
                     </div>
                   </div>
                   <div className="stepper">
-                    <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)}>
+                    <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)} disabled={p.countedToday}>
                       −
                     </button>
                     <input
@@ -344,8 +344,9 @@ export default function StorePage() {
                       placeholder="–"
                       onChange={(e) => onInput(p.id, e.target.value)}
                       onFocus={(e) => e.target.select()}
+                      disabled={p.countedToday}
                     />
-                    <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)}>
+                    <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)} disabled={p.countedToday}>
                       +
                     </button>
                     <button

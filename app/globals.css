@@ -134,6 +134,8 @@ input { font-family: var(--font-body); }
 .count-input::-webkit-outer-spin-button,
 .count-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .count-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+.count-input:disabled { background: #f4f0f2; color: var(--muted); cursor: not-allowed; border-color: var(--line); }
+.step-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
 /* ---------- Buttons ---------- */
 .btn {
