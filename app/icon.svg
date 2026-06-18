@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 248" aria-label="Siembras">
+  <circle cx="100" cy="158" r="58" fill="none" stroke="#6CAE2C" stroke-width="29"/>
+  <ellipse cx="100" cy="158" rx="19" ry="23" fill="#E8A23D"/>
+  <path d="M100 139 C93 149 93 167 100 177" fill="none" stroke="#C9821F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M100 160 L100 66" fill="none" stroke="#3F7A2A" stroke-width="8" stroke-linecap="round"/>
+  <path d="M100 74 C83 75 56 67 39 45 C35 41 37 34 43 34 C72 37 96 50 100 74 Z" fill="#5EA126"/>
+  <path d="M98 72 C81 62 63 52 45 41" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M100 74 C117 75 144 67 161 45 C165 41 163 34 157 34 C128 37 104 50 100 74 Z" fill="#84C63C"/>
+  <path d="M102 72 C119 62 137 52 155 41" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+</svg>
