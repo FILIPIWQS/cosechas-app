@@ -102,7 +102,7 @@ const SEED = [
   { name: 'LEITE EM PÓ DESNATADO', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_706442-MLA99931620127_112025-F.webp' },
   { name: 'COPO PARA PROVA', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_609928-MLB73541781451_122023-F-copo-descartavel-50ml-cafe-cafezinho-5000-uni-caixa-full.webp' },
   { name: 'COLHER PEQUENA', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_817496-MLB89138203383_082025-F.webp' },
-  { name: 'COCO EM LASCAS 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_21.jpg' },
+  { name: 'COCO EM LASCAS 500g', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_810220-MLB74700135866_022024-F.webp' },
   { name: 'COCO RALADO 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_22.jpg' },
   { name: 'CAFÉ SOLUVEL', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_23.jpg' },
   { name: 'AMENDOIM PICADO 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_24.jpg' },
