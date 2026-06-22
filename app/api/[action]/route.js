@@ -100,7 +100,7 @@ const SEED = [
   { name: 'PESSEGO EM CALDA', image: 'https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcSFoK_7j4H1pKzXYsKRkmfLYz-ZDcJQ7oyEarBn6Hg2pGnlC6-xYlnf6zJJcLN4Zt5j5k1EObg8i64uCjUDS5YILjmuyorvpBJSzTrVy2jVoG66LkzGSJ87CO8ps8EIXuMR5zDeJw&usqp=CAc' },
   { name: 'LUVA DESCARTAVEL 100UN', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_660148-MLA110430589285_042026-F.webp' },
   { name: 'LEITE EM PÓ DESNATADO', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_706442-MLA99931620127_112025-F.webp' },
-  { name: 'COPO PARA PROVA', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_19.jpg' },
+  { name: 'COPO PARA PROVA', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_609928-MLB73541781451_122023-F-copo-descartavel-50ml-cafe-cafezinho-5000-uni-caixa-full.webp' },
   { name: 'COLHER PEQUENA', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_20.jpg' },
   { name: 'COCO EM LASCAS 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_21.jpg' },
   { name: 'COCO RALADO 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_22.jpg' },
