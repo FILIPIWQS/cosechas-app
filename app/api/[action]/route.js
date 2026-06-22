@@ -94,7 +94,7 @@ const SEED = [
   { name: 'Abacaxi Em Pedaços (Pct 3KG)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_12.jpg' },
   { name: 'Abacate KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/11bd9399-ae9f-4cb0-964e-95739d6e6404abacate.jpg' },
   { name: '1º pedido - Franquias' },
-  { name: 'SACO PLASTICO 30X40 5KG', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_13.jpg' },
+  { name: 'SACO PLASTICO 30X40 5KG', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_732801-MLB77379863793_072024-F.webp' },
   { name: 'PROTEINA DE SOJA ISOLADA 500g', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_14.jpg' },
   { name: 'PLASTICO FILME', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_15.jpg' },
   { name: 'PESSEGO EM CALDA', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_16.jpg' },
