@@ -275,6 +275,29 @@ export async function POST(request, { params }) {
     }
   }
 
+  if (action === 'sync-images') {
+    if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
+    if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
+    try {
+      const products = await getProducts();
+      const seedMap = new Map(
+        SEED.filter((s) => s.image).map((s) => [s.name.toLowerCase().trim(), s.image])
+      );
+      let updated = 0;
+      for (const p of products) {
+        const seedImage = seedMap.get(p.name.toLowerCase().trim());
+        if (seedImage && p.image !== seedImage) {
+          p.image = seedImage;
+          updated++;
+        }
+      }
+      if (updated > 0) await saveProducts(products);
+      return Response.json({ ok: true, updated });
+    } catch (e) {
+      return Response.json({ error: 'sync_failed' }, { status: 500 });
+    }
+  }
+
   if (action === 'reset') {
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
     try {

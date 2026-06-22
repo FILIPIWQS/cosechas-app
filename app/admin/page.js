@@ -260,6 +260,20 @@ export default function AdminPage() {
     });
   }
 
+  async function syncImages() {
+    const res = await fetch('/api/sync-images', {
+      method: 'POST',
+      headers: { 'x-admin-password': password },
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Fotos sincronizadas: ${data.updated} produto(s) atualizado(s).`);
+      loadProducts();
+    } else {
+      alert('Erro ao sincronizar fotos.');
+    }
+  }
+
   async function resetCounts() {
     if (!confirm('Zerar todas as contagens da loja? Use isto antes de uma nova contagem.')) return;
     const res = await fetch('/api/reset', {
@@ -437,6 +451,9 @@ export default function AdminPage() {
               </button>
               <button className="btn btn-ghost btn-sm" onClick={resetCounts}>
                 Zerar contagens da loja
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={syncImages}>
+                Sincronizar fotos
               </button>
             </div>
 
