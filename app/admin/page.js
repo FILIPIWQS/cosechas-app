@@ -1,7 +1,68 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+
+function ImageField({ value, onChange, label = 'Foto' }) {
+  const fileRef = useRef(null);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 700;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        onChange(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  return (
+    <div className="field field-image">
+      <label>{label}</label>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          type="text"
+          placeholder="https://… ou /img/arquivo.jpg"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          title="Fazer upload de imagem"
+          onClick={() => fileRef.current?.click()}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          📁 Arquivo
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+      </div>
+      {value ? (
+        <img
+          src={value}
+          alt=""
+          style={{ marginTop: 8, maxHeight: 72, maxWidth: 120, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border)' }}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
 const FREQ_LABEL = { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' };
@@ -416,15 +477,7 @@ export default function AdminPage() {
                   ))}
                 </select>
               </div>
-              <div className="field field-image">
-                <label>URL da foto (opcional)</label>
-                <input
-                  type="text"
-                  placeholder="https://… ou /img/arquivo.jpg"
-                  value={newImage}
-                  onChange={(e) => setNewImage(e.target.value)}
-                />
-              </div>
+              <ImageField label="Foto (opcional)" value={newImage} onChange={setNewImage} />
               <button className="btn btn-primary" type="submit">
                 Adicionar
               </button>
@@ -475,13 +528,11 @@ export default function AdminPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="field field-full">
-                      <label>URL da foto</label>
-                      <input
-                        type="text"
-                        placeholder="https://… ou /img/arquivo.jpg"
+                    <div className="field-full">
+                      <ImageField
+                        label="Foto"
                         value={editData.image}
-                        onChange={(e) => setEditData({ ...editData, image: e.target.value })}
+                        onChange={(v) => setEditData({ ...editData, image: v })}
                       />
                     </div>
                   </div>
