@@ -96,7 +96,7 @@ const SEED = [
   { name: '1º pedido - Franquias' },
   { name: 'SACO PLASTICO 30X40 5KG', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_732801-MLB77379863793_072024-F.webp' },
   { name: 'PROTEINA DE SOJA ISOLADA 500g', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_719777-MLB96504770705_102025-F.webp' },
-  { name: 'PLASTICO FILME', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_15.jpg' },
+  { name: 'PLASTICO FILME', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_897344-MLB92318213493_092025-F.webp' },
   { name: 'PESSEGO EM CALDA', image: 'https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcSFoK_7j4H1pKzXYsKRkmfLYz-ZDcJQ7oyEarBn6Hg2pGnlC6-xYlnf6zJJcLN4Zt5j5k1EObg8i64uCjUDS5YILjmuyorvpBJSzTrVy2jVoG66LkzGSJ87CO8ps8EIXuMR5zDeJw&usqp=CAc' },
   { name: 'LUVA DESCARTAVEL 100UN', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_17.jpg' },
   { name: 'LEITE EM PÓ DESNATADO', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_18.jpg' },
