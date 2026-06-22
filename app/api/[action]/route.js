@@ -106,7 +106,7 @@ const SEED = [
   { name: 'COCO RALADO 500g', image: 'https://casaspedro.vteximg.com.br/arquivos/ids/214206-550-550/coco-ralado-grosso-kg.png?v=639116946775800000' },
   { name: 'CAFÉ SOLUVEL', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_685516-MLA99420381356_112025-F.webp' },
   { name: 'AMENDOIM PICADO 500g', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_672345-MLB92386915926_092025-F.webp' },
-  { name: 'Açucar Cristal 1KG', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_25.jpg' },
+  { name: 'Açucar Cristal 1KG', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_774088-MLU72851295114_112023-F.webp' },
 ];
 
 export const dynamic = 'force-dynamic';
