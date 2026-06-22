@@ -9,7 +9,7 @@ const KEY = 'cosechas:products';
 const LOGS_KEY = 'cosechas:logs';
 const DATE_KEY = 'cosechas:countdate';
 const SEED_VERSION_KEY = 'cosechas:seedver';
-const SEED_VERSION = 4;
+const SEED_VERSION = 5;
 const MAX_LOGS = 800;
 const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
 
@@ -206,7 +206,7 @@ export async function GET(request, { params }) {
             updatedAt: now,
           });
           changed = true;
-        } else if (s.image && !ex.image) {
+        } else if (s.image && ex.image !== s.image) {
           ex.image = s.image;
           changed = true;
         }
