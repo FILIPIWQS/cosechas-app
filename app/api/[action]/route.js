@@ -9,7 +9,7 @@ const KEY = 'cosechas:products';
 const LOGS_KEY = 'cosechas:logs';
 const DATE_KEY = 'cosechas:countdate';
 const SEED_VERSION_KEY = 'cosechas:seedver';
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 const MAX_LOGS = 800;
 const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
 
@@ -94,6 +94,19 @@ const SEED = [
   { name: 'Abacaxi Em Pedaços (Pct 3KG)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_12.jpg' },
   { name: 'Abacate KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/11bd9399-ae9f-4cb0-964e-95739d6e6404abacate.jpg' },
   { name: '1º pedido - Franquias' },
+  { name: 'SACO PLASTICO 30X40 5KG', image: '/img/sacola-plastica.jpg' },
+  { name: 'PROTEINA DE SOJA ISOLADA 500g', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/a2cde2a6-bd1d-4f71-a978-d990c1c0af19WhatsApp_Image_2023-03-24_at_12.12.12.jpeg' },
+  { name: 'PLASTICO FILME', image: '/img/sacola-plastica.jpg' },
+  { name: 'PESSEGO EM CALDA', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_13.jpg' },
+  { name: 'LUVA DESCARTAVEL 100UN', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_14.jpg' },
+  { name: 'LEITE EM PÓ DESNATADO', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_6.jpg' },
+  { name: 'COPO PARA PROVA', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4d059cd1-24a2-4953-87e8-0e779fd84ab8COOOPO.jpg' },
+  { name: 'COLHER PEQUENA', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_2.jpg' },
+  { name: 'COCO EM LASCAS 500g', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/aec17148-17f1-43b4-b85d-5eb95d197656creme_de_coco.jpg' },
+  { name: 'COCO RALADO 500g', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/aec17148-17f1-43b4-b85d-5eb95d197656creme_de_coco.jpg' },
+  { name: 'CAFÉ SOLUVEL', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_15.jpg' },
+  { name: 'AMENDOIM PICADO 500g', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/8ff07249-3d62-475c-9e19-bd3babc9a80epasta_de_amendoim.png' },
+  { name: 'Açucar Cristal 1KG', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_16.jpg' },
 ];
 
 export const dynamic = 'force-dynamic';
