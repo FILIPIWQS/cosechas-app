@@ -91,11 +91,12 @@ export default function AdminPage() {
   const [newUnit, setNewUnit] = useState('');
   const [newPar, setNewPar] = useState('');
   const [newImage, setNewImage] = useState('');
+  const [newFornecedor, setNewFornecedor] = useState('');
   const [newFreq, setNewFreq] = useState('diaria');
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '', frequency: 'diaria' });
+  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '', frequency: 'diaria', fornecedor: '' });
 
   // histórico de contagens
   const [logs, setLogs] = useState([]);
@@ -193,6 +194,7 @@ export default function AdminPage() {
         unit: newUnit.trim(),
         par: Number(newPar) || 0,
         image: newImage.trim(),
+        fornecedor: newFornecedor.trim(),
         frequency: newFreq,
       }),
     });
@@ -203,6 +205,7 @@ export default function AdminPage() {
       setNewUnit('');
       setNewPar('');
       setNewImage('');
+      setNewFornecedor('');
       setNewFreq('diaria');
     }
   }
@@ -226,6 +229,7 @@ export default function AdminPage() {
       image: p.image || '',
       par: String(Number(p.par) || 0),
       frequency: p.frequency || 'diaria',
+      fornecedor: p.fornecedor || '',
     });
   }
 
@@ -240,12 +244,13 @@ export default function AdminPage() {
     const unit = editData.unit.trim();
     const image = editData.image.trim();
     const frequency = editData.frequency || 'diaria';
-    updateLocal(id, { name, unit, image, par, frequency });
+    const fornecedor = editData.fornecedor.trim();
+    updateLocal(id, { name, unit, image, par, frequency, fornecedor });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, unit, image, par, frequency }),
+      body: JSON.stringify({ id, name, unit, image, par, frequency, fornecedor }),
     });
   }
 
@@ -271,6 +276,20 @@ export default function AdminPage() {
       loadProducts();
     } else {
       alert('Erro ao sincronizar fotos.');
+    }
+  }
+
+  async function syncFornecedores() {
+    const res = await fetch('/api/sync-fornecedores', {
+      method: 'POST',
+      headers: { 'x-admin-password': password },
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Fornecedores sincronizados: ${data.updated} produto(s) atualizado(s).`);
+      loadProducts();
+    } else {
+      alert('Erro ao sincronizar fornecedores.');
     }
   }
 
@@ -455,6 +474,9 @@ export default function AdminPage() {
               <button className="btn btn-ghost btn-sm" onClick={syncImages}>
                 Sincronizar fotos
               </button>
+              <button className="btn btn-ghost btn-sm" onClick={syncFornecedores}>
+                Sincronizar fornecedores
+              </button>
             </div>
 
             <form className="add-form" onSubmit={addProduct}>
@@ -493,6 +515,15 @@ export default function AdminPage() {
                     <option key={f} value={f}>{FREQ_LABEL[f]}</option>
                   ))}
                 </select>
+              </div>
+              <div className="field">
+                <label>Fornecedor</label>
+                <input
+                  type="text"
+                  placeholder="Ex.: Nechio"
+                  value={newFornecedor}
+                  onChange={(e) => setNewFornecedor(e.target.value)}
+                />
               </div>
               <ImageField label="Foto (opcional)" value={newImage} onChange={setNewImage} />
               <button className="btn btn-primary" type="submit">
@@ -545,6 +576,14 @@ export default function AdminPage() {
                         ))}
                       </select>
                     </div>
+                    <div className="field">
+                      <label>Fornecedor</label>
+                      <input
+                        type="text"
+                        value={editData.fornecedor}
+                        onChange={(e) => setEditData({ ...editData, fornecedor: e.target.value })}
+                      />
+                    </div>
                     <div className="field-full">
                       <ImageField
                         label="Foto"
@@ -570,6 +609,7 @@ export default function AdminPage() {
                     <div className="punit">
                       <span className={'freq-tag freq-' + freqOf(p)}>{FREQ_LABEL[freqOf(p)]}</span>
                       {p.unit ? ' · ' + p.unit : ''} · contado: {Number(p.count) || 0}
+                      {p.fornecedor ? ' · ' + p.fornecedor : ''}
                       {p.lastBy ? ' · por ' + p.lastBy : ''}
                     </div>
                   </div>
