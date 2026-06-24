@@ -20,7 +20,7 @@ const SEED = [
   { name: 'Guardanapos (1000 unidades)', image: '/img/guardanapos.jpg', fornecedor: 'Brassi' },
   { name: 'Copo M + Canudos (500 unidades)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4d059cd1-24a2-4953-87e8-0e779fd84ab8COOOPO.jpg', fornecedor: 'Brassi' },
   { name: 'Copo G + Canudos (500 unidades)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_1.jpg', fornecedor: 'Brassi' },
-  { name: 'Bowl Médio (100 unidades)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/1ea84832-5aef-4483-9410-3ca5008742c6bowl.jpg', fornecedor: 'Brassi' },
+
   { name: 'Bowl Grande (100 unidades)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/1ea84832-5aef-4483-9410-3ca5008742c6bowl.jpg', fornecedor: 'Brassi' },
   { name: 'Colher TRIO (200 unidades)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_2.jpg', fornecedor: 'Nechio' },
   { name: 'Canudo BIO (500 unidades)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_3.jpg', fornecedor: 'Brassi' },
@@ -72,9 +72,7 @@ const SEED = [
   { name: 'Chocolate cremoso 1 kg (Frete a combinar com vendedor)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_10.jpg', fornecedor: 'i9 café' },
   { name: 'Cereja Congelada (1KG)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_11.jpg', fornecedor: 'Nechio' },
   { name: 'Cenoura KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/f52f27e7-a2a5-4dbb-b916-dc5d9536e8d3cenoura.png', fornecedor: 'Benassi RJ' },
-  { name: 'Cappuccino 1kg (Frete a combinar com vendedor)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/94d0bbf8-52ee-40a1-8393-9f56b9260859Capturar1.PNG', fornecedor: 'i9 café' },
   { name: 'Caju Polpa 1.2KG (Sempre Viva)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/6bbc323e-4515-4a38-97c7-65ccefb88dd0WhatsApp_Image_2024-06-24_at_17.28.01_1.jpeg', fornecedor: 'Nechio' },
-  { name: 'Blueberry Fruta 1.02KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/ab4b00cb-3793-4eb1-8b25-35059120d0dcBlueberry.jpg', fornecedor: 'Nechio' },
   { name: 'Blend Pura Energia (200G) [15 Und]', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4cef3392-f7ff-404f-89c4-02c6057de0a5WhatsApp_Image_2026-04-16_at_16.59.27.jpeg', fornecedor: '' },
   { name: 'Blend Melancia Limão (200G) [15 Und]', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4cef3392-f7ff-404f-89c4-02c6057de0a5WhatsApp_Image_2026-04-16_at_16.59.27.jpeg', fornecedor: '' },
   { name: 'Blend Limonada de Coco (200G) [15 Und]', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4cef3392-f7ff-404f-89c4-02c6057de0a5WhatsApp_Image_2026-04-16_at_16.59.27.jpeg', fornecedor: '' },
@@ -83,9 +81,7 @@ const SEED = [
   { name: 'Blend Colibri Roxo (200G) [15 Und]', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/4cef3392-f7ff-404f-89c4-02c6057de0a5WhatsApp_Image_2026-04-16_at_16.59.27.jpeg', fornecedor: '' },
   { name: 'Beterraba KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/b8fd83e0-1d58-45c1-8ec5-4082af0cd175beterraba1-1000x1000.jpg', fornecedor: 'Benassi RJ' },
   { name: "Banana D'Agua KG", image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/49330959-4e09-435e-a408-b800333200e0banana.jpg', fornecedor: 'Benassi RJ' },
-  { name: 'Açaí Mix Natural (7L)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/ff814fec-fb10-4f25-bda5-396b84f5e12facai.jpg', fornecedor: 'Nechio' },
   { name: 'Açaí (10L)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/ff814fec-fb10-4f25-bda5-396b84f5e12facai.jpg', fornecedor: 'Nechio' },
-  { name: 'Avelã com Chocolate 4KG (Dorella)', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/912342d8-5ae4-46de-87ae-52c2d92e7900WhatsApp_Image_2022-11-17_at_11.24.51.jpeg', fornecedor: 'Nechio' },
   { name: 'Aveia Nechio 500g', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/24ee7527-a4e0-44e8-8dbe-9406c91b5178Aveia.jpg', fornecedor: 'Nechio' },
   { name: 'Amora Fruta 1.02KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/74331c99-d277-46c3-b0c8-cf27dfc41249amora.jpg', fornecedor: 'Nechio' },
   { name: 'Aipo UN', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/66afca3c-7ee0-4481-9667-cd1b52cacc6faipo.jpg', fornecedor: 'Benassi RJ' },
@@ -93,7 +89,7 @@ const SEED = [
   { name: 'Abacaxi KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/63885f48-f112-4bc6-8a1f-f55e214b86d2abacaxi.png', fornecedor: 'Benassi RJ' },
   { name: 'Abacaxi Em Pedaços (Pct 3KG)', image: 'https://res.cloudinary.com/dxv7tpwlo/image/upload/v1/foto_12.jpg', fornecedor: 'NATURCONGELADOS' },
   { name: 'Abacate KG', image: 'https://d1siijb9yj77t6.cloudfront.net/85/thumb/1280w/11bd9399-ae9f-4cb0-964e-95739d6e6404abacate.jpg', fornecedor: 'Benassi RJ' },
-  { name: '1º pedido - Franquias', fornecedor: '' },
+
   { name: 'SACO PLASTICO 30X40 5KG', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_732801-MLB77379863793_072024-F.webp', fornecedor: '' },
   { name: 'PROTEINA DE SOJA ISOLADA 500g', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_719777-MLB96504770705_102025-F.webp', fornecedor: '' },
   { name: 'PLASTICO FILME', image: 'https://http2.mlstatic.com/D_NQ_NP_2X_897344-MLB92318213493_092025-F.webp', fornecedor: '' },
@@ -187,27 +183,10 @@ export async function GET(request, { params }) {
     const ver = Number(await redis.get(SEED_VERSION_KEY)) || 0;
     if (ver < SEED_VERSION) {
       const byName = new Map(products.map((p) => [p.name, p]));
-      const now = Date.now();
       let changed = false;
-      let i = 0;
       for (const s of SEED) {
         const ex = byName.get(s.name);
-        if (!ex) {
-          products.push({
-            id: genId() + (i++).toString(36),
-            name: s.name,
-            unit: '',
-            par: 0,
-            count: 0,
-            image: s.image || '',
-            fornecedor: s.fornecedor || '',
-            frequency: 'diaria',
-            countedToday: false,
-            lastBy: '',
-            updatedAt: now,
-          });
-          changed = true;
-        } else {
+        if (ex) {
           if (s.image && ex.image !== s.image) { ex.image = s.image; changed = true; }
           if (s.fornecedor && !ex.fornecedor) { ex.fornecedor = s.fornecedor; changed = true; }
         }
