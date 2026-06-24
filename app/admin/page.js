@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 function ImageField({ value, onChange, label = 'Foto' }) {
@@ -64,12 +64,6 @@ function ImageField({ value, onChange, label = 'Foto' }) {
   );
 }
 
-const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
-const FREQ_LABEL = { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' };
-function freqOf(p) {
-  return FREQS.includes(p.frequency) ? p.frequency : 'diaria';
-}
-
 function buyQty(p) {
   return Math.max(0, (Number(p.par) || 0) - (Number(p.count) || 0));
 }
@@ -88,15 +82,13 @@ export default function AdminPage() {
 
   // novo produto
   const [newName, setNewName] = useState('');
-  const [newUnit, setNewUnit] = useState('');
   const [newPar, setNewPar] = useState('');
   const [newImage, setNewImage] = useState('');
   const [newFornecedor, setNewFornecedor] = useState('');
-  const [newFreq, setNewFreq] = useState('diaria');
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', unit: '', image: '', par: '', frequency: 'diaria', fornecedor: '' });
+  const [editData, setEditData] = useState({ name: '', image: '', par: '', fornecedor: '' });
 
   // histórico de contagens
   const [logs, setLogs] = useState([]);
@@ -191,22 +183,18 @@ export default function AdminPage() {
       headers: authHeaders(),
       body: JSON.stringify({
         name,
-        unit: newUnit.trim(),
         par: Number(newPar) || 0,
         image: newImage.trim(),
         fornecedor: newFornecedor.trim(),
-        frequency: newFreq,
       }),
     });
     if (res.ok) {
       const data = await res.json();
       setProducts((prev) => [...prev, data.product]);
       setNewName('');
-      setNewUnit('');
       setNewPar('');
       setNewImage('');
       setNewFornecedor('');
-      setNewFreq('diaria');
     }
   }
 
@@ -225,10 +213,8 @@ export default function AdminPage() {
     setEditingId(p.id);
     setEditData({
       name: p.name || '',
-      unit: p.unit || '',
       image: p.image || '',
       par: String(Number(p.par) || 0),
-      frequency: p.frequency || 'diaria',
       fornecedor: p.fornecedor || '',
     });
   }
@@ -241,16 +227,14 @@ export default function AdminPage() {
     const name = editData.name.trim();
     if (!name) return;
     const par = Math.max(0, Number(editData.par) || 0);
-    const unit = editData.unit.trim();
     const image = editData.image.trim();
-    const frequency = editData.frequency || 'diaria';
     const fornecedor = editData.fornecedor.trim();
-    updateLocal(id, { name, unit, image, par, frequency, fornecedor });
+    updateLocal(id, { name, image, par, fornecedor });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, unit, image, par, frequency, fornecedor }),
+      body: JSON.stringify({ id, name, image, par, fornecedor }),
     });
   }
 
@@ -323,11 +307,13 @@ export default function AdminPage() {
   }
 
   function copyList() {
-    const toBuy = products.filter((p) => buyQty(p) > 0);
-    const text =
-      'Lista de compras — Siembras\n' +
-      toBuy.map((p) => `• ${p.name}: ${buyQty(p)}${p.unit ? ' ' + p.unit : ''}`).join('\n');
-    navigator.clipboard?.writeText(text).then(() => {
+    const lines = ['Lista de compras — Siembras'];
+    for (const [supplier, items] of sortedGroups) {
+      lines.push('');
+      lines.push(`** ${supplier} **`);
+      for (const p of items) lines.push(`• ${p.name}: ${buyQty(p)}`);
+    }
+    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     });
@@ -384,9 +370,20 @@ export default function AdminPage() {
   }
 
   // ---------- PAINEL ----------
-  const toBuy = products
-    .filter((p) => buyQty(p) > 0)
-    .sort((a, b) => buyQty(b) - buyQty(a) || a.name.localeCompare(b.name, 'pt'));
+  const toBuy = products.filter((p) => buyQty(p) > 0);
+
+  const groupedToBuy = toBuy.reduce((acc, p) => {
+    const key = p.fornecedor || 'Sem fornecedor';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(p);
+    return acc;
+  }, {});
+  const sortedGroups = Object.entries(groupedToBuy).sort(([a], [b]) => {
+    if (a === 'Sem fornecedor') return 1;
+    if (b === 'Sem fornecedor') return -1;
+    return a.localeCompare(b, 'pt');
+  });
+  for (const [, items] of sortedGroups) items.sort((a, b) => a.name.localeCompare(b.name, 'pt'));
 
   const visible = products
     .slice()
@@ -444,18 +441,22 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {toBuy.map((p) => (
-                      <tr key={p.id} className="row-go">
-                        <td>
-                          {p.name}
-                          {p.unit ? <span style={{ color: 'var(--muted)' }}> · {p.unit}</span> : null}
-                        </td>
-                        <td className="num">{Number(p.count) || 0}</td>
-                        <td className="num">{Number(p.par) || 0}</td>
-                        <td className="num">
-                          <span className="buy-qty go">{buyQty(p)}</span>
-                        </td>
-                      </tr>
+                    {sortedGroups.map(([supplier, items]) => (
+                      <Fragment key={supplier}>
+                        <tr className="supplier-row">
+                          <td colSpan={4} className="supplier-cell">{supplier}</td>
+                        </tr>
+                        {items.map((p) => (
+                          <tr key={p.id} className="row-go">
+                            <td>{p.name}</td>
+                            <td className="num">{Number(p.count) || 0}</td>
+                            <td className="num">{Number(p.par) || 0}</td>
+                            <td className="num">
+                              <span className="buy-qty go">{buyQty(p)}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -490,15 +491,6 @@ export default function AdminPage() {
                 />
               </div>
               <div className="field">
-                <label>Unidade</label>
-                <input
-                  type="text"
-                  placeholder="kg, un, cx…"
-                  value={newUnit}
-                  onChange={(e) => setNewUnit(e.target.value)}
-                />
-              </div>
-              <div className="field">
                 <label>Regulador</label>
                 <input
                   type="number"
@@ -507,14 +499,6 @@ export default function AdminPage() {
                   value={newPar}
                   onChange={(e) => setNewPar(e.target.value)}
                 />
-              </div>
-              <div className="field">
-                <label>Frequência</label>
-                <select className="freq-select" value={newFreq} onChange={(e) => setNewFreq(e.target.value)}>
-                  {FREQS.map((f) => (
-                    <option key={f} value={f}>{FREQ_LABEL[f]}</option>
-                  ))}
-                </select>
               </div>
               <div className="field">
                 <label>Fornecedor</label>
@@ -552,14 +536,6 @@ export default function AdminPage() {
                       />
                     </div>
                     <div className="field">
-                      <label>Unidade</label>
-                      <input
-                        type="text"
-                        value={editData.unit}
-                        onChange={(e) => setEditData({ ...editData, unit: e.target.value })}
-                      />
-                    </div>
-                    <div className="field">
                       <label>Regulador</label>
                       <input
                         type="number"
@@ -567,14 +543,6 @@ export default function AdminPage() {
                         value={editData.par}
                         onChange={(e) => setEditData({ ...editData, par: e.target.value })}
                       />
-                    </div>
-                    <div className="field">
-                      <label>Frequência</label>
-                      <select className="freq-select" value={editData.frequency} onChange={(e) => setEditData({ ...editData, frequency: e.target.value })}>
-                        {FREQS.map((f) => (
-                          <option key={f} value={f}>{FREQ_LABEL[f]}</option>
-                        ))}
-                      </select>
                     </div>
                     <div className="field">
                       <label>Fornecedor</label>
@@ -607,9 +575,8 @@ export default function AdminPage() {
                   <div className="info">
                     <div className="pname">{p.name}</div>
                     <div className="punit">
-                      <span className={'freq-tag freq-' + freqOf(p)}>{FREQ_LABEL[freqOf(p)]}</span>
-                      {p.unit ? ' · ' + p.unit : ''} · contado: {Number(p.count) || 0}
-                      {p.fornecedor ? ' · ' + p.fornecedor : ''}
+                      {p.fornecedor ? <span style={{ color: 'var(--muted)' }}>{p.fornecedor} · </span> : null}
+                      contado: {Number(p.count) || 0}
                       {p.lastBy ? ' · por ' + p.lastBy : ''}
                     </div>
                   </div>

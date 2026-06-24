@@ -3,13 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
-const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
-const FREQ_LABEL = { diaria: 'Diária', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' };
-
-function freqOf(p) {
-  return FREQS.includes(p.frequency) ? p.frequency : 'diaria';
-}
-
 function playAlert() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -47,7 +40,6 @@ export default function StorePage() {
   const [countDate, setCountDate] = useState('');
   const [savedId, setSavedId] = useState(null);
   const [search, setSearch] = useState('');
-  const [freqFilter, setFreqFilter] = useState('todos');
 
   const [collaborator, setCollaborator] = useState('');
   const [nameSaved, setNameSaved] = useState(false);
@@ -232,15 +224,13 @@ export default function StorePage() {
     } catch (e) {}
   }
 
-  // escopo do progresso = filtro de frequência (ignora a busca)
-  const scope = products.filter((p) => freqFilter === 'todos' || freqOf(p) === freqFilter);
-  const counted = scope.filter((p) => p.countedToday).length;
-  const total = scope.length;
+  const counted = products.filter((p) => p.countedToday).length;
+  const total = products.length;
   const pct = total ? Math.round((counted / total) * 100) : 0;
   const complete = total > 0 && counted === total;
   const pendingAll = products.filter((p) => !p.countedToday).length;
 
-  const visible = scope
+  const visible = products
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -363,25 +353,6 @@ export default function StorePage() {
               onChange={(e) => setSearch(e.target.value)}
             />
 
-            {/* Filtros de frequência */}
-            <div className="pills">
-              <button
-                className={'pill' + (freqFilter === 'todos' ? ' active' : '')}
-                onClick={() => setFreqFilter('todos')}
-              >
-                Todos
-              </button>
-              {FREQS.map((f) => (
-                <button
-                  key={f}
-                  className={'pill' + (freqFilter === f ? ' active' : '')}
-                  onClick={() => setFreqFilter(f)}
-                >
-                  {FREQ_LABEL[f]}
-                </button>
-              ))}
-            </div>
-
             {visible.length === 0 ? (
               <div className="card empty">
                 <p>Nenhum produto nesta seção.</p>
@@ -393,7 +364,6 @@ export default function StorePage() {
                   <div className="info">
                     <div className="pname">{p.name}</div>
                     <div className="prow">
-                      <span className={'freq-tag freq-' + freqOf(p)}>{FREQ_LABEL[freqOf(p)]}</span>
                       {p.countedToday ? (
                         <span className="counted-tag">✓ contado</span>
                       ) : (
