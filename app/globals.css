@@ -385,3 +385,29 @@ tr:last-child td { border-bottom: none; }
   border-radius: 12px; padding: 0 10px; font-size: 15px; background: #fff;
 }
 .edit-grid .freq-select { height: 42px; }
+
+/* ---------- Botão Finalizar Contagem ---------- */
+.btn-finalizar {
+  display: block;
+  width: 100%;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  background: var(--green);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(108, 174, 44, 0.4);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-finalizar:hover:not(:disabled) {
+  background: var(--green-600);
+  box-shadow: 0 6px 20px rgba(90, 146, 36, 0.5);
+  transform: translateY(-1px);
+}
+.btn-finalizar:active:not(:disabled) { transform: translateY(0); }
+.btn-finalizar:disabled { opacity: 0.65; cursor: not-allowed; }
