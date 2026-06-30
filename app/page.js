@@ -231,7 +231,7 @@ export default function StorePage() {
     } else {
       const groups = {};
       for (const p of belowPar) {
-        const key = p.supplier?.trim() || '__sem__';
+        const key = p.fornecedor?.trim() || '__sem__';
         if (!groups[key]) groups[key] = [];
         groups[key].push(p);
       }
