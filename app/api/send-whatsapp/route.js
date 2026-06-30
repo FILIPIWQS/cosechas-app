@@ -7,7 +7,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 });
     }
 
-    const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE_NAME}`;
+    const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
