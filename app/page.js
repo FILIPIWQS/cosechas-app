@@ -217,7 +217,7 @@ export default function StorePage() {
     setProducts((prev) => prev.map((x) => x.id === id ? { ...x, count } : x));
   }
 
-  function finalizarContagem() {
+  async function finalizarContagem() {
     setSending(true);
     const dateStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     const countedProducts = products
@@ -226,10 +226,20 @@ export default function StorePage() {
     const lines = countedProducts
       .map((p) => `- ${p.name}${p.supplier ? ` (${p.supplier})` : ''}: ${Number(p.count) || 0} unidades`)
       .join('\n');
-    const msg = `✅ Contagem finalizada em ${dateStr}\nColaborador: ${collaborator}\n\n📦 LISTA DE ESTOQUE:\n${lines}`;
-    const phone = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '';
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-    setSending(false);
+    const message = `✅ Contagem finalizada em ${dateStr}\nColaborador: ${collaborator}\n\n📦 LISTA DE ESTOQUE:\n${lines}`;
+    try {
+      const res = await fetch('/api/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error('Falha ao enviar');
+      alert('✅ Lista enviada com sucesso via WhatsApp!');
+    } catch (e) {
+      alert('❌ Erro ao enviar a lista. Tente novamente.');
+    } finally {
+      setSending(false);
+    }
   }
 
   async function enableNotifications() {
