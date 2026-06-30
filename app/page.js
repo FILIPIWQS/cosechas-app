@@ -47,6 +47,7 @@ export default function StorePage() {
   const [notifPerm, setNotifPerm] = useState('default'); // default | granted | denied | unsupported
   const [reminderOpen, setReminderOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [savingIds, setSavingIds] = useState(new Set());
 
   const timers = useRef({});
   const productsRef = useRef([]);
@@ -175,6 +176,7 @@ export default function StorePage() {
   }
 
   async function saveCount(id, count, confirmed) {
+    setSavingIds((prev) => new Set([...prev, id]));
     try {
       const body = { id, count, by: collaborator };
       if (confirmed === false) body.confirmed = false;
@@ -185,10 +187,18 @@ export default function StorePage() {
       });
       setSavedId(id);
       setTimeout(() => setSavedId((s) => (s === id ? null : s)), 1400);
-    } catch (e) {}
+    } catch (e) {
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
   function toggleConfirm(id) {
+    if (savingIds.has(id)) return;
     const p = products.find((x) => x.id === id);
     if (!p) return;
     if (p.countedToday) {
@@ -455,9 +465,9 @@ export default function StorePage() {
                       className={'step-btn confirm-btn' + (p.countedToday ? ' confirmed' : '')}
                       aria-label={p.countedToday ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
                       onClick={() => toggleConfirm(p.id)}
-                      disabled={!collaborator.trim() && !p.countedToday}
+                      disabled={(!collaborator.trim() && !p.countedToday) || savingIds.has(p.id)}
                     >
-                      ✓
+                      {savingIds.has(p.id) ? '⏳' : '✓'}
                     </button>
                   </div>
                 </div>

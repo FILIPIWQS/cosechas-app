@@ -227,20 +227,22 @@ export async function POST(request, { params }) {
       }
       let products = await getProducts();
       const day = await ensureCurrentDay(products);
-      products = day.products;
-      const idx = products.findIndex((p) => p.id === id);
+      // Re-read fresh from Redis right before writing to minimize stale-write window.
+      // ensureCurrentDay may have already reset & saved (day rollover), so re-read after it.
+      const fresh = await getProducts();
+      const idx = fresh.findIndex((p) => p.id === id);
       if (idx === -1) return Response.json({ error: 'not_found' }, { status: 404 });
-      const prev = Number(products[idx].count) || 0;
-      products[idx].count = count;
-      products[idx].countedToday = confirmed;
-      products[idx].lastBy = by;
-      products[idx].updatedAt = Date.now();
-      await saveProducts(products);
+      const prev = Number(fresh[idx].count) || 0;
+      fresh[idx].count = count;
+      fresh[idx].countedToday = confirmed;
+      fresh[idx].lastBy = by;
+      fresh[idx].updatedAt = Date.now();
+      await saveProducts(fresh);
       if (confirmed) {
         const logs = await getLogs();
         logs.unshift({
           id: genId(),
-          productName: products[idx].name,
+          productName: fresh[idx].name,
           prev,
           next: count,
           by,
