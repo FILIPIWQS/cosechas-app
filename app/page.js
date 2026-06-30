@@ -220,13 +220,38 @@ export default function StorePage() {
   async function finalizarContagem() {
     setSending(true);
     const dateStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const countedProducts = products
-      .filter((p) => p.countedToday)
+
+    const belowPar = products
+      .filter((p) => p.countedToday && Number(p.count) < Number(p.par))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt'));
-    const lines = countedProducts
-      .map((p) => `- ${p.name}${p.supplier ? ` (${p.supplier})` : ''}: ${Number(p.count) || 0} unidades`)
-      .join('\n');
-    const message = `✅ Contagem finalizada em ${dateStr}\nColaborador: ${collaborator}\n\n📦 LISTA DE ESTOQUE:\n${lines}`;
+
+    let message;
+    if (belowPar.length === 0) {
+      message = `✅ Estoque OK! Nenhuma compra necessária hoje.\nColaborador: ${collaborator}\n${dateStr}`;
+    } else {
+      const groups = {};
+      for (const p of belowPar) {
+        const key = p.supplier?.trim() || '__sem__';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      }
+      const suppliers = Object.keys(groups).sort((a, b) => {
+        if (a === '__sem__') return 1;
+        if (b === '__sem__') return -1;
+        return a.localeCompare(b, 'pt');
+      });
+      const sections = suppliers.map((key) => {
+        const label = key === '__sem__' ? 'Sem fornecedor' : key;
+        const lines = groups[key].map((p) => {
+          const count = Number(p.count) || 0;
+          const par = Number(p.par) || 0;
+          return `- ${p.name}: comprar ${par - count} (estoque: ${count}, mínimo: ${par})`;
+        });
+        return `🏪 ${label}\n${lines.join('\n')}`;
+      });
+      message = `🛒 LISTA DE COMPRAS - ${dateStr}\nColaborador: ${collaborator}\n\n${sections.join('\n\n')}`;
+    }
+
     try {
       const res = await fetch('/api/send-whatsapp', {
         method: 'POST',
