@@ -107,6 +107,10 @@ const SEED = [
 
 export const dynamic = 'force-dynamic';
 
+// Hash key: each field is a product id, value is JSON string of the product.
+// Atomic per-field HSET eliminates the read-modify-write race condition.
+const HASH_KEY = 'cosechas:products:hash';
+
 function todayBRT() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
@@ -121,16 +125,45 @@ function isAdmin(request) {
   return request.headers.get('x-admin-password') === expected;
 }
 
+function parseProduct(raw) {
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  return raw && typeof raw === 'object' ? raw : null;
+}
+
+// Reads all products from the hash. Falls back to legacy array key and migrates automatically.
 async function getProducts() {
   if (!redis) return [];
-  let data = await redis.get(KEY);
-  if (data == null) return [];
-  if (typeof data === 'string') {
-    try { data = JSON.parse(data); } catch { return []; }
+  const hash = await redis.hgetall(HASH_KEY);
+  if (hash && Object.keys(hash).length > 0) {
+    return Object.values(hash).map(parseProduct).filter(Boolean);
   }
-  return Array.isArray(data) ? data : [];
+  // Migration: legacy array key exists but hash is empty — populate hash from it.
+  let legacy = await redis.get(KEY);
+  if (legacy == null) return [];
+  if (typeof legacy === 'string') {
+    try { legacy = JSON.parse(legacy); } catch { return []; }
+  }
+  if (!Array.isArray(legacy) || legacy.length === 0) return [];
+  const fields = {};
+  for (const p of legacy) fields[p.id] = JSON.stringify(p);
+  await redis.hset(HASH_KEY, fields);
+  return legacy;
 }
-async function saveProducts(products) { await redis.set(KEY, products); }
+
+// Bulk-saves an array of products into the hash (used for reset, seed updates, day rollover).
+async function saveProducts(products) {
+  if (!products.length) return;
+  const fields = {};
+  for (const p of products) fields[p.id] = JSON.stringify(p);
+  await redis.hset(HASH_KEY, fields);
+}
+
+// Atomically updates a single product field in the hash — no other product is touched.
+async function saveProduct(product) {
+  await redis.hset(HASH_KEY, { [product.id]: JSON.stringify(product) });
+}
 
 async function getLogs() {
   if (!redis) return [];
@@ -143,30 +176,37 @@ async function getLogs() {
 }
 async function saveLogs(logs) { await redis.set(LOGS_KEY, logs.slice(0, MAX_LOGS)); }
 
-// Zera as contagens automaticamente quando vira o dia (horario de Brasilia).
-async function ensureCurrentDay(products) {
+// Resets all product counts when the calendar day (BRT) changes.
+// Returns the current countDate string.
+async function ensureCurrentDay() {
   const today = todayBRT();
   const stored = await redis.get(DATE_KEY);
   if (stored == null) {
-    // Primeira vez: assume que as contagens atuais sao de hoje (nao zera).
     await redis.set(DATE_KEY, today);
-    return { products, countDate: today };
+    return today;
   }
   if (stored !== today) {
-    const now = Date.now();
-    for (const p of products) {
-      p.count = 0;
-      p.countedToday = false;
-      p.updatedAt = now;
+    const hash = await redis.hgetall(HASH_KEY);
+    if (hash && Object.keys(hash).length > 0) {
+      const now = Date.now();
+      const fields = {};
+      for (const [id, raw] of Object.entries(hash)) {
+        const p = parseProduct(raw);
+        if (p) {
+          p.count = 0;
+          p.countedToday = false;
+          p.updatedAt = now;
+          fields[id] = JSON.stringify(p);
+        }
+      }
+      if (Object.keys(fields).length > 0) await redis.hset(HASH_KEY, fields);
     }
-    await saveProducts(products);
     await redis.set(DATE_KEY, today);
   }
-  return { products, countDate: today };
+  return today;
 }
 
 export async function GET(request, { params }) {
-  // Historico (apenas admin)
   if (params.action === 'logs') {
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -179,23 +219,26 @@ export async function GET(request, { params }) {
     return Response.json({ error: 'db_not_configured' }, { status: 503 });
   }
   try {
-    let products = await getProducts();
+    // Day rollover first, then read (so we always return the post-reset state).
+    const countDate = await ensureCurrentDay();
+    const products = await getProducts();
     const ver = Number(await redis.get(SEED_VERSION_KEY)) || 0;
     if (ver < SEED_VERSION) {
       const byName = new Map(products.map((p) => [p.name, p]));
-      let changed = false;
+      const toUpdate = {};
       for (const s of SEED) {
         const ex = byName.get(s.name);
         if (ex) {
+          let changed = false;
           if (s.image && ex.image !== s.image) { ex.image = s.image; changed = true; }
           if (s.fornecedor && !ex.fornecedor) { ex.fornecedor = s.fornecedor; changed = true; }
+          if (changed) toUpdate[ex.id] = JSON.stringify(ex);
         }
       }
-      if (changed) await saveProducts(products);
+      if (Object.keys(toUpdate).length > 0) await redis.hset(HASH_KEY, toUpdate);
       await redis.set(SEED_VERSION_KEY, String(SEED_VERSION));
     }
-    const day = await ensureCurrentDay(products);
-    return Response.json({ products: day.products, countDate: day.countDate });
+    return Response.json({ products, countDate });
   } catch (e) {
     return Response.json({ error: 'read_failed' }, { status: 500 });
   }
@@ -225,30 +268,21 @@ export async function POST(request, { params }) {
       if (Number.isNaN(count) || count < 0) {
         return Response.json({ error: 'invalid_count' }, { status: 400 });
       }
-      let products = await getProducts();
-      const day = await ensureCurrentDay(products);
-      // Re-read fresh from Redis right before writing to minimize stale-write window.
-      // ensureCurrentDay may have already reset & saved (day rollover), so re-read after it.
-      const fresh = await getProducts();
-      const idx = fresh.findIndex((p) => p.id === id);
-      if (idx === -1) return Response.json({ error: 'not_found' }, { status: 404 });
-      const prev = Number(fresh[idx].count) || 0;
-      fresh[idx].count = count;
-      fresh[idx].countedToday = confirmed;
-      fresh[idx].lastBy = by;
-      fresh[idx].updatedAt = Date.now();
-      await saveProducts(fresh);
+      // Handle day rollover, then fetch and update only this product's hash field.
+      const countDate = await ensureCurrentDay();
+      const raw = await redis.hget(HASH_KEY, id);
+      if (!raw) return Response.json({ error: 'not_found' }, { status: 404 });
+      const p = parseProduct(raw);
+      const prev = Number(p.count) || 0;
+      p.count = count;
+      p.countedToday = confirmed;
+      p.lastBy = by;
+      p.updatedAt = Date.now();
+      // Atomic single-field HSET — does not touch any other product.
+      await saveProduct(p);
       if (confirmed) {
         const logs = await getLogs();
-        logs.unshift({
-          id: genId(),
-          productName: fresh[idx].name,
-          prev,
-          next: count,
-          by,
-          ts: Date.now(),
-          date: day.countDate,
-        });
+        logs.unshift({ id: genId(), productName: p.name, prev, next: count, by, ts: Date.now(), date: countDate });
         await saveLogs(logs);
       }
       return Response.json({ ok: true });
@@ -262,18 +296,14 @@ export async function POST(request, { params }) {
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
       const products = await getProducts();
-      const seedMap = new Map(
-        SEED.filter((s) => s.image).map((s) => [s.name.toLowerCase().trim(), s.image])
-      );
+      const seedMap = new Map(SEED.filter((s) => s.image).map((s) => [s.name.toLowerCase().trim(), s.image]));
+      const toUpdate = {};
       let updated = 0;
       for (const p of products) {
-        const seedImage = seedMap.get(p.name.toLowerCase().trim());
-        if (seedImage && p.image !== seedImage) {
-          p.image = seedImage;
-          updated++;
-        }
+        const img = seedMap.get(p.name.toLowerCase().trim());
+        if (img && p.image !== img) { p.image = img; toUpdate[p.id] = JSON.stringify(p); updated++; }
       }
-      if (updated > 0) await saveProducts(products);
+      if (updated > 0) await redis.hset(HASH_KEY, toUpdate);
       return Response.json({ ok: true, updated });
     } catch (e) {
       return Response.json({ error: 'sync_failed' }, { status: 500 });
@@ -285,18 +315,14 @@ export async function POST(request, { params }) {
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
       const products = await getProducts();
-      const seedMap = new Map(
-        SEED.filter((s) => s.fornecedor).map((s) => [s.name.toLowerCase().trim(), s.fornecedor])
-      );
+      const seedMap = new Map(SEED.filter((s) => s.fornecedor).map((s) => [s.name.toLowerCase().trim(), s.fornecedor]));
+      const toUpdate = {};
       let updated = 0;
       for (const p of products) {
-        const fornecedor = seedMap.get(p.name.toLowerCase().trim());
-        if (fornecedor && !p.fornecedor) {
-          p.fornecedor = fornecedor;
-          updated++;
-        }
+        const forn = seedMap.get(p.name.toLowerCase().trim());
+        if (forn && !p.fornecedor) { p.fornecedor = forn; toUpdate[p.id] = JSON.stringify(p); updated++; }
       }
-      if (updated > 0) await saveProducts(products);
+      if (updated > 0) await redis.hset(HASH_KEY, toUpdate);
       return Response.json({ ok: true, updated });
     } catch (e) {
       return Response.json({ error: 'sync_failed' }, { status: 500 });
@@ -308,12 +334,14 @@ export async function POST(request, { params }) {
     try {
       const products = await getProducts();
       const now = Date.now();
-      products.forEach((p) => {
+      const fields = {};
+      for (const p of products) {
         p.count = 0;
         p.countedToday = false;
         p.updatedAt = now;
-      });
-      await saveProducts(products);
+        fields[p.id] = JSON.stringify(p);
+      }
+      if (Object.keys(fields).length > 0) await redis.hset(HASH_KEY, fields);
       await redis.set(DATE_KEY, todayBRT());
       return Response.json({ ok: true });
     } catch (e) {
@@ -341,9 +369,7 @@ export async function POST(request, { params }) {
         lastBy: '',
         updatedAt: Date.now(),
       };
-      const products = await getProducts();
-      products.push(product);
-      await saveProducts(products);
+      await saveProduct(product);
       return Response.json({ product });
     } catch (e) {
       return Response.json({ error: 'create_failed' }, { status: 500 });
@@ -359,10 +385,9 @@ export async function PUT(request, { params }) {
   try {
     const body = await request.json();
     if (!body.id) return Response.json({ error: 'id_required' }, { status: 400 });
-    const products = await getProducts();
-    const idx = products.findIndex((p) => p.id === body.id);
-    if (idx === -1) return Response.json({ error: 'not_found' }, { status: 404 });
-    const p = products[idx];
+    const raw = await redis.hget(HASH_KEY, body.id);
+    if (!raw) return Response.json({ error: 'not_found' }, { status: 404 });
+    const p = parseProduct(raw);
     if (body.name !== undefined) p.name = String(body.name).trim();
     if (body.unit !== undefined) p.unit = String(body.unit).trim();
     if (body.par !== undefined) p.par = Math.max(0, Number(body.par) || 0);
@@ -370,7 +395,7 @@ export async function PUT(request, { params }) {
     if (body.fornecedor !== undefined) p.fornecedor = String(body.fornecedor).trim();
     if (body.frequency !== undefined && FREQS.includes(body.frequency)) p.frequency = body.frequency;
     p.updatedAt = Date.now();
-    await saveProducts(products);
+    await saveProduct(p);
     return Response.json({ product: p });
   } catch (e) {
     return Response.json({ error: 'update_failed' }, { status: 500 });
@@ -384,8 +409,7 @@ export async function DELETE(request, { params }) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return Response.json({ error: 'id_required' }, { status: 400 });
-    const products = await getProducts();
-    await saveProducts(products.filter((p) => p.id !== id));
+    await redis.hdel(HASH_KEY, id);
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ error: 'delete_failed' }, { status: 500 });
