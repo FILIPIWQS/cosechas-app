@@ -8,6 +8,8 @@ export async function POST(req) {
     }
 
     const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
+    console.log('[send-whatsapp] POST', url);
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -20,14 +22,37 @@ export async function POST(req) {
       }),
     });
 
+    console.log('[send-whatsapp] status', res.status);
+
+    const rawBody = await res.text();
+
     if (!res.ok) {
-      const errorBody = await res.text();
-      return NextResponse.json({ error: 'Evolution API error', details: errorBody }, { status: res.status });
+      let parsedError;
+      try {
+        parsedError = JSON.parse(rawBody);
+      } catch {
+        parsedError = rawBody;
+      }
+      console.log('[send-whatsapp] error body', rawBody);
+      return NextResponse.json(
+        {
+          error: 'Evolution API error',
+          status: res.status,
+          details: parsedError,
+        },
+        { status: res.status }
+      );
     }
 
-    const data = await res.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      data = rawBody;
+    }
     return NextResponse.json({ success: true, data });
   } catch (err) {
+    console.log('[send-whatsapp] unexpected error', err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
