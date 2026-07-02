@@ -282,7 +282,7 @@ export async function POST(request, { params }) {
       await saveProduct(p);
       if (confirmed) {
         const logs = await getLogs();
-        logs.unshift({ id: genId(), productName: p.name, prev, next: count, by, ts: Date.now(), date: countDate });
+        logs.unshift({ id: genId(), productId: p.id, productName: p.name, prev, next: count, by, ts: Date.now(), date: countDate });
         await saveLogs(logs);
       }
       return Response.json({ ok: true });

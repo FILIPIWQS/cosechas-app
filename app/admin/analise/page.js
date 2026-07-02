@@ -39,18 +39,34 @@ function computeVariation(prev, last) {
   return { pct, direction };
 }
 
+function buildLookups(products) {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const byName = new Map(products.map((p) => [p.name, p]));
+  return { byId, byName };
+}
+
+// Resolves a log entry to its current product record. Newer logs carry
+// productId, which survives renames; older logs fall back to matching by the
+// name recorded at the time. Returns null when the product was excluded.
+function resolveProduct(log, byId, byName) {
+  if (log.productId && byId.has(log.productId)) return byId.get(log.productId);
+  if (byName.has(log.productName)) return byName.get(log.productName);
+  return null;
+}
+
 // One row per product, comparing the 2 most recent confirmed counts overall —
 // regardless of calendar gap (a weekly product may not have a count "yesterday").
-function buildLatestRows(logs, fornecedorByName) {
-  const byName = new Map();
+function buildLatestRows(logs, byId, byName) {
+  const grouped = new Map(); // product.id -> { product, entries }
   for (const log of logs) {
-    if (!fornecedorByName.has(log.productName)) continue; // product no longer exists (excluded/renamed)
-    if (!byName.has(log.productName)) byName.set(log.productName, []);
-    byName.get(log.productName).push(log);
+    const product = resolveProduct(log, byId, byName);
+    if (!product) continue;
+    if (!grouped.has(product.id)) grouped.set(product.id, { product, entries: [] });
+    grouped.get(product.id).entries.push(log);
   }
 
   const rows = [];
-  for (const [name, entries] of byName) {
+  for (const { product, entries } of grouped.values()) {
     entries.sort((a, b) => b.ts - a.ts);
     const last = entries[0];
     const prev = entries[1] || null;
@@ -69,8 +85,8 @@ function buildLatestRows(logs, fornecedorByName) {
     }
 
     rows.push({
-      name,
-      fornecedor: fornecedorByName.get(name) || '',
+      name: product.name,
+      fornecedor: product.fornecedor || '',
       prevValue,
       prevDate: prev ? prev.date : null,
       lastValue,
@@ -88,23 +104,25 @@ function buildLatestRows(logs, fornecedorByName) {
 // One row per product with a log inside `dates`, one column per calendar day
 // (or "-" if not counted that day) and the variation between the last two
 // counted days within the period.
-function buildRangeRows(logs, fornecedorByName, dates) {
+function buildRangeRows(logs, byId, byName, dates) {
   const dateSet = new Set(dates);
   const latestByKey = new Map();
-  const names = new Set();
+  const products = new Map(); // product.id -> product
+
   for (const log of logs) {
     if (!dateSet.has(log.date)) continue;
-    if (!fornecedorByName.has(log.productName)) continue; // product no longer exists (excluded/renamed)
-    names.add(log.productName);
-    const key = `${log.productName}||${log.date}`;
+    const product = resolveProduct(log, byId, byName);
+    if (!product) continue;
+    products.set(product.id, product);
+    const key = `${product.id}||${log.date}`;
     const existing = latestByKey.get(key);
     if (!existing || log.ts > existing.ts) latestByKey.set(key, { ts: log.ts, value: Number(log.next) || 0 });
   }
 
   const rows = [];
-  for (const name of names) {
+  for (const product of products.values()) {
     const values = dates.map((date) => {
-      const hit = latestByKey.get(`${name}||${date}`);
+      const hit = latestByKey.get(`${product.id}||${date}`);
       return hit ? hit.value : null;
     });
     const counted = values.filter((v) => v !== null);
@@ -121,7 +139,7 @@ function buildRangeRows(logs, fornecedorByName, dates) {
     const lastValue = counted.length ? counted[counted.length - 1] : null;
     const suspicious = avg !== null && avg > 0 && lastValue !== null && lastValue <= avg * 0.3;
 
-    rows.push({ name, fornecedor: fornecedorByName.get(name) || '', values, variationPct, direction, suspicious });
+    rows.push({ name: product.name, fornecedor: product.fornecedor || '', values, variationPct, direction, suspicious });
   }
 
   rows.sort((a, b) => Math.abs(b.variationPct ?? -1) - Math.abs(a.variationPct ?? -1));
@@ -265,17 +283,17 @@ export default function AnalisePage() {
     }
   }
 
-  const fornecedorByName = useMemo(() => new Map(products.map((p) => [p.name, p.fornecedor || ''])), [products]);
+  const { byId, byName } = useMemo(() => buildLookups(products), [products]);
   const period = PERIODS.find((p) => p.key === periodKey) || PERIODS[0];
   const dates = useMemo(() => (period.mode === 'range' ? lastNDates(period.days) : []), [period.mode, period.days]);
 
   const latestRows = useMemo(
-    () => (period.mode === 'latest' ? buildLatestRows(logs, fornecedorByName) : []),
-    [period.mode, logs, fornecedorByName]
+    () => (period.mode === 'latest' ? buildLatestRows(logs, byId, byName) : []),
+    [period.mode, logs, byId, byName]
   );
   const rangeRows = useMemo(
-    () => (period.mode === 'range' ? buildRangeRows(logs, fornecedorByName, dates) : []),
-    [period.mode, logs, fornecedorByName, dates]
+    () => (period.mode === 'range' ? buildRangeRows(logs, byId, byName, dates) : []),
+    [period.mode, logs, byId, byName, dates]
   );
 
   const searchLower = search.trim().toLowerCase();
