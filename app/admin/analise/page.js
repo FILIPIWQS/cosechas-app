@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 const PERIODS = [
-  { key: 'today_yesterday', label: 'Hoje vs Ontem', days: 2 },
-  { key: '7d', label: 'Últimos 7 dias', days: 7 },
-  { key: '15d', label: 'Últimos 15 dias', days: 15 },
+  { key: 'latest', label: 'Atual vs Última Contagem', mode: 'latest' },
+  { key: '7d', label: 'Últimos 7 dias', mode: 'range', days: 7 },
+  { key: '15d', label: 'Últimos 15 dias', mode: 'range', days: 15 },
 ];
 
 function todayBRT() {
@@ -32,10 +32,62 @@ function formatLabel(dateStr) {
   return `${d}/${m}`;
 }
 
-// Builds one row per product that has at least one log within `dates`, with
-// the latest counted value per day and the variation between the last two
-// counted days (which may not be adjacent if a day was skipped).
-function buildRows(logs, fornecedorByName, dates) {
+function computeVariation(prev, last) {
+  if (prev === 0) return { pct: last === 0 ? 0 : 100, direction: last > 0 ? 'up' : 'flat' };
+  const pct = ((last - prev) / prev) * 100;
+  const direction = last > prev ? 'up' : last < prev ? 'down' : 'flat';
+  return { pct, direction };
+}
+
+// One row per product, comparing the 2 most recent confirmed counts overall —
+// regardless of calendar gap (a weekly product may not have a count "yesterday").
+function buildLatestRows(logs, fornecedorByName) {
+  const byName = new Map();
+  for (const log of logs) {
+    if (!byName.has(log.productName)) byName.set(log.productName, []);
+    byName.get(log.productName).push(log);
+  }
+
+  const rows = [];
+  for (const [name, entries] of byName) {
+    entries.sort((a, b) => b.ts - a.ts);
+    const last = entries[0];
+    const prev = entries[1] || null;
+    const lastValue = Number(last.next) || 0;
+    const prevValue = prev ? Number(prev.next) || 0 : null;
+
+    let variationPct = null;
+    let direction = 'flat';
+    let suspicious = false;
+    if (prevValue !== null) {
+      const v = computeVariation(prevValue, lastValue);
+      variationPct = v.pct;
+      direction = v.direction;
+      const avg = (prevValue + lastValue) / 2;
+      suspicious = avg > 0 && lastValue <= avg * 0.3;
+    }
+
+    rows.push({
+      name,
+      fornecedor: fornecedorByName.get(name) || '',
+      prevValue,
+      prevDate: prev ? prev.date : null,
+      lastValue,
+      lastDate: last.date,
+      variationPct,
+      direction,
+      suspicious,
+    });
+  }
+
+  rows.sort((a, b) => Math.abs(b.variationPct ?? -1) - Math.abs(a.variationPct ?? -1));
+  return rows;
+}
+
+// One row per product with a log inside `dates`, one column per calendar day
+// (or "-" if not counted that day) and the variation between the last two
+// counted days within the period.
+function buildRangeRows(logs, fornecedorByName, dates) {
   const dateSet = new Set(dates);
   const latestByKey = new Map();
   const names = new Set();
@@ -58,10 +110,9 @@ function buildRows(logs, fornecedorByName, dates) {
     let variationPct = null;
     let direction = 'flat';
     if (counted.length >= 2) {
-      const prev = counted[counted.length - 2];
-      const last = counted[counted.length - 1];
-      variationPct = prev === 0 ? (last === 0 ? 0 : 100) : ((last - prev) / prev) * 100;
-      direction = last > prev ? 'up' : last < prev ? 'down' : 'flat';
+      const v = computeVariation(counted[counted.length - 2], counted[counted.length - 1]);
+      variationPct = v.pct;
+      direction = v.direction;
     }
 
     const avg = counted.length ? counted.reduce((a, b) => a + b, 0) / counted.length : null;
@@ -73,6 +124,15 @@ function buildRows(logs, fornecedorByName, dates) {
 
   rows.sort((a, b) => Math.abs(b.variationPct ?? -1) - Math.abs(a.variationPct ?? -1));
   return rows;
+}
+
+function VariationTag({ variationPct, direction }) {
+  if (variationPct === null) return <span className="variation flat">-</span>;
+  return (
+    <span className={`variation ${direction}`}>
+      {direction === 'up' ? '▲' : direction === 'down' ? '▼' : '→'} {Math.abs(Math.round(variationPct))}%
+    </span>
+  );
 }
 
 function Header({ onLogout }) {
@@ -101,6 +161,12 @@ function Header({ onLogout }) {
   );
 }
 
+function formatDateShort(dateStr) {
+  if (!dateStr) return '—';
+  const [, m, d] = dateStr.split('-');
+  return `${d}/${m}`;
+}
+
 export default function AnalisePage() {
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState('');
@@ -112,7 +178,7 @@ export default function AnalisePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [periodKey, setPeriodKey] = useState('7d');
+  const [periodKey, setPeriodKey] = useState('latest');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -198,10 +264,22 @@ export default function AnalisePage() {
   }
 
   const fornecedorByName = useMemo(() => new Map(products.map((p) => [p.name, p.fornecedor || ''])), [products]);
-  const period = PERIODS.find((p) => p.key === periodKey) || PERIODS[1];
-  const dates = useMemo(() => lastNDates(period.days), [period.days]);
-  const rows = useMemo(() => buildRows(logs, fornecedorByName, dates), [logs, fornecedorByName, dates]);
-  const visibleRows = rows.filter((r) => r.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const period = PERIODS.find((p) => p.key === periodKey) || PERIODS[0];
+  const dates = useMemo(() => (period.mode === 'range' ? lastNDates(period.days) : []), [period.mode, period.days]);
+
+  const latestRows = useMemo(
+    () => (period.mode === 'latest' ? buildLatestRows(logs, fornecedorByName) : []),
+    [period.mode, logs, fornecedorByName]
+  );
+  const rangeRows = useMemo(
+    () => (period.mode === 'range' ? buildRangeRows(logs, fornecedorByName, dates) : []),
+    [period.mode, logs, fornecedorByName, dates]
+  );
+
+  const searchLower = search.trim().toLowerCase();
+  const visibleLatestRows = latestRows.filter((r) => r.name.toLowerCase().includes(searchLower));
+  const visibleRangeRows = rangeRows.filter((r) => r.name.toLowerCase().includes(searchLower));
+  const isEmpty = period.mode === 'latest' ? visibleLatestRows.length === 0 : visibleRangeRows.length === 0;
 
   if (checking) {
     return (
@@ -271,8 +349,40 @@ export default function AnalisePage() {
           <div className="spinner">Carregando…</div>
         ) : loadError ? (
           <div className="empty">{loadError}</div>
-        ) : visibleRows.length === 0 ? (
-          <div className="empty">Nenhuma contagem encontrada para este período.</div>
+        ) : isEmpty ? (
+          <div className="empty">Nenhuma contagem encontrada.</div>
+        ) : period.mode === 'latest' ? (
+          <div className="report">
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Fornecedor</th>
+                    <th className="num">Contagem anterior</th>
+                    <th className="num">Contagem atual</th>
+                    <th className="num">Variação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleLatestRows.map((r) => (
+                    <tr key={r.name}>
+                      <td>
+                        {r.name}
+                        {r.suspicious ? <span className="badge-suspeito">⚠️ Suspeito</span> : null}
+                      </td>
+                      <td>{r.fornecedor || '—'}</td>
+                      <td className="num">
+                        {r.prevValue === null ? '-' : `${r.prevValue} (${formatDateShort(r.prevDate)})`}
+                      </td>
+                      <td className="num">{r.lastValue} ({formatDateShort(r.lastDate)})</td>
+                      <td className="num"><VariationTag variationPct={r.variationPct} direction={r.direction} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           <div className="report">
             <div className="table-scroll">
@@ -288,7 +398,7 @@ export default function AnalisePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((r) => (
+                  {visibleRangeRows.map((r) => (
                     <tr key={r.name}>
                       <td>
                         {r.name}
@@ -298,15 +408,7 @@ export default function AnalisePage() {
                       {r.values.map((v, i) => (
                         <td key={i} className="num">{v === null ? '-' : v}</td>
                       ))}
-                      <td className="num">
-                        {r.variationPct === null ? (
-                          <span className="variation flat">-</span>
-                        ) : (
-                          <span className={`variation ${r.direction}`}>
-                            {r.direction === 'up' ? '▲' : r.direction === 'down' ? '▼' : '→'} {Math.abs(Math.round(r.variationPct))}%
-                          </span>
-                        )}
-                      </td>
+                      <td className="num"><VariationTag variationPct={r.variationPct} direction={r.direction} /></td>
                     </tr>
                   ))}
                 </tbody>
