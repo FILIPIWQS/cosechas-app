@@ -413,6 +413,11 @@ export default function AdminPage() {
       </header>
 
       <main className="wrap">
+        <nav className="admin-tabs">
+          <span className="admin-tab active">Produtos</span>
+          <Link className="admin-tab" href="/admin/analise">Análise</Link>
+        </nav>
+
         {loading ? (
           <div className="spinner">Carregando…</div>
         ) : (

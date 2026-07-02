@@ -386,6 +386,28 @@ tr:last-child td { border-bottom: none; }
 }
 .edit-grid .freq-select { height: 42px; }
 
+/* ---------- Abas admin (Produtos / Análise) ---------- */
+.admin-tabs { display: flex; gap: 8px; margin: 0 0 18px; }
+.admin-tab {
+  text-decoration: none; font-family: var(--font-display); font-weight: 800; font-size: 13.5px;
+  padding: 9px 16px; border-radius: 999px; background: rgba(42, 83, 37, 0.08);
+  border: 1px solid rgba(42, 83, 37, 0.22); color: var(--green-dark); display: inline-block;
+}
+.admin-tab.active { background: var(--green); color: #fff; border-color: var(--green); }
+.admin-tab:hover:not(.active) { background: rgba(42, 83, 37, 0.14); }
+
+/* ---------- Análise de contagens ---------- */
+.table-scroll { overflow-x: auto; }
+.variation { font-family: var(--font-display); font-weight: 800; white-space: nowrap; }
+.variation.up { color: var(--green-600); }
+.variation.down { color: var(--brand); }
+.variation.flat { color: var(--muted); }
+.badge-suspeito {
+  display: inline-block; background: var(--brand-050); color: var(--brand);
+  font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px;
+  margin-left: 8px; white-space: nowrap; vertical-align: middle;
+}
+
 /* ---------- Botão Finalizar Contagem ---------- */
 .btn-finalizar {
   display: block;
