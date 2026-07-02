@@ -18,6 +18,11 @@ const nunito = Nunito({
 export const metadata = {
   title: 'Siembras',
   description: 'Contagem de estoque e lista de reposição da loja Siembras',
+  appleWebApp: {
+    capable: true,
+    title: 'Siembras',
+    statusBarStyle: 'default',
+  },
 };
 
 export const viewport = {
