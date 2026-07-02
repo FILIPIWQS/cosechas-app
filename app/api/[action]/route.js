@@ -10,7 +10,7 @@ const LOGS_KEY = 'cosechas:logs';
 const DATE_KEY = 'cosechas:countdate';
 const SEED_VERSION_KEY = 'cosechas:seedver';
 const SEED_VERSION = 6;
-const MAX_LOGS = 800;
+const MAX_LOGS = 3000;
 const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
 
 const SEED = [
