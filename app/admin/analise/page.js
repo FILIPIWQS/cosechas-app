@@ -44,6 +44,7 @@ function computeVariation(prev, last) {
 function buildLatestRows(logs, fornecedorByName) {
   const byName = new Map();
   for (const log of logs) {
+    if (!fornecedorByName.has(log.productName)) continue; // product no longer exists (excluded/renamed)
     if (!byName.has(log.productName)) byName.set(log.productName, []);
     byName.get(log.productName).push(log);
   }
@@ -93,6 +94,7 @@ function buildRangeRows(logs, fornecedorByName, dates) {
   const names = new Set();
   for (const log of logs) {
     if (!dateSet.has(log.date)) continue;
+    if (!fornecedorByName.has(log.productName)) continue; // product no longer exists (excluded/renamed)
     names.add(log.productName);
     const key = `${log.productName}||${log.date}`;
     const existing = latestByKey.get(key);
