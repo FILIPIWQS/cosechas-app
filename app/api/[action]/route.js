@@ -32,7 +32,7 @@ const SEED_VERSION = 6;
 const MAX_LOGS = 3000;
 const FREQS = ['diaria', 'semanal', 'quinzenal', 'mensal'];
 
-const SEED = [
+export const SEED = [
   { name: 'Selo (1 Rolo)', image: '/img/selo.jpg', fornecedor: 'Brassi' },
   { name: 'Sacola Plástica (1000 Unidades)', image: '/img/sacola-plastica.jpg', fornecedor: 'Brassi' },
   { name: 'Sacola Kraft + Base para copos (100 unidades)', image: '/img/sacola-kraft.jpg', fornecedor: 'Brassi' },

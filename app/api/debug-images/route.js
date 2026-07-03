@@ -1,8 +1,10 @@
 import { Redis } from '@upstash/redis';
+import { SEED } from '../[action]/route.js';
 
 const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const redis = url && token ? new Redis({ url, token }) : null;
+const GLOBAL_HASH_KEY = 'siembras:products:hash';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +64,40 @@ export async function GET() {
       'siembras:niteroi:counts (gen2 counts)': { total: countsHash ? Object.keys(countsHash).length : 0 },
       seedVersions: { global: seedverGlobal, niteroiOld: seedverNiteroi, cosechasOld: seedverCosechas },
     });
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// Conservative backfill: only fills `image` when the current catalog entry has
+// none AND SEED has a URL for that exact product name. Never overwrites an
+// existing (possibly custom) image.
+export async function POST() {
+  if (!redis) {
+    return Response.json({ error: 'Redis not configured' }, { status: 503 });
+  }
+  try {
+    const hash = await redis.hgetall(GLOBAL_HASH_KEY);
+    if (!hash) return Response.json({ updated: 0, checked: 0 });
+    const seedMap = new Map(SEED.filter((s) => s.image).map((s) => [s.name.toLowerCase().trim(), s.image]));
+    const toUpdate = {};
+    const filled = [];
+    let checked = 0;
+    for (const [id, raw] of Object.entries(hash)) {
+      const p = parseProduct(raw);
+      if (!p) continue;
+      checked++;
+      if (p.image) continue; // never overwrite an existing image
+      const img = seedMap.get((p.name || '').toLowerCase().trim());
+      if (img) {
+        p.image = img;
+        p.updatedAt = Date.now();
+        toUpdate[id] = JSON.stringify(p);
+        filled.push({ id, name: p.name, image: img });
+      }
+    }
+    if (Object.keys(toUpdate).length > 0) await redis.hset(GLOBAL_HASH_KEY, toUpdate);
+    return Response.json({ checked, updated: filled.length, filled });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }
