@@ -362,22 +362,21 @@ tr:last-child td { border-bottom: none; }
 .pill.active { background: var(--green); color: #fff; border-color: var(--green); }
 
 /* ---------- Store selector ---------- */
-.store-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
+.store-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 8px;
 }
-.store-card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 28px 16px;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  transition: transform 0.05s, box-shadow 0.15s;
+.store-item {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px;
+  text-align: left;
+  font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--ink);
+  transition: background 0.15s, border-color 0.15s;
 }
-.store-card:hover { box-shadow: 0 1px 2px rgba(0, 30, 0, 0.08), 0 14px 32px rgba(0, 30, 0, 0.16); }
-.store-card:active { transform: scale(0.98); }
-.store-emoji { font-size: 42px; line-height: 1; }
-.store-name { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); }
+.store-item:hover { background: var(--green-050); border-color: var(--green); }
+.store-item:active { background: var(--green-050); }
 
 .store-badge {
   display: inline-flex; align-items: center; gap: 6px;

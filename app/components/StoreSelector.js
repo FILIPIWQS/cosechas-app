@@ -30,11 +30,10 @@ export default function StoreSelector({ onSelect }) {
 
       <main className="wrap">
         <div className="section-title">Selecione a loja</div>
-        <div className="store-grid">
+        <div className="store-list">
           {STORES.map((s) => (
-            <button key={s.id} type="button" className="store-card" onClick={() => handleSelect(s.id)}>
-              <span className="store-emoji">{s.emoji}</span>
-              <span className="store-name">{s.name}</span>
+            <button key={s.id} type="button" className="store-item" onClick={() => handleSelect(s.id)}>
+              {s.name}
             </button>
           ))}
         </div>
