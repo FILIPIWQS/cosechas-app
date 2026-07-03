@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import StoreSelector from './components/StoreSelector';
+import { STORES } from '../lib/stores';
 
 function playAlert() {
   try {
@@ -34,6 +36,10 @@ function formatDate(iso) {
 }
 
 export default function StorePage() {
+  const [storeId, setStoreId] = useState('');
+  const [storeChecked, setStoreChecked] = useState(false);
+  const storeIdRef = useRef('');
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState('ok'); // ok | db | error
@@ -71,11 +77,23 @@ export default function StorePage() {
     } catch (e) {}
     if (typeof Notification !== 'undefined') setNotifPerm(Notification.permission);
     else setNotifPerm('unsupported');
-    load();
+    try {
+      const savedStore = localStorage.getItem('siembras_store');
+      if (savedStore && STORES.some((s) => s.id === savedStore)) {
+        setStoreId(savedStore);
+      }
+    } catch (e) {}
+    setStoreChecked(true);
     const t = timers.current;
     return () => Object.values(t).forEach((id) => clearTimeout(id));
     // eslint-disable-next-line
   }, []);
+
+  useEffect(() => {
+    storeIdRef.current = storeId;
+    if (storeId) load();
+    // eslint-disable-next-line
+  }, [storeId]);
 
   // Lembrete a cada 5 minutos se a contagem não terminou
   useEffect(() => {
@@ -131,7 +149,10 @@ export default function StorePage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch('/api/products', { cache: 'no-store' });
+      const res = await fetch('/api/products', {
+        cache: 'no-store',
+        headers: { 'x-store-id': storeIdRef.current },
+      });
       if (res.status === 503) {
         setState('db');
         setLoading(false);
@@ -182,7 +203,7 @@ export default function StorePage() {
       if (confirmed === false) body.confirmed = false;
       await fetch('/api/count', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
         body: JSON.stringify(body),
       });
       setSavedId(id);
@@ -265,7 +286,7 @@ export default function StorePage() {
     try {
       const res = await fetch('/api/send-whatsapp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
         body: JSON.stringify({ message }),
       });
       if (!res.ok) throw new Error('Falha ao enviar');
@@ -296,6 +317,12 @@ export default function StorePage() {
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
 
+  if (storeChecked && !storeId) {
+    return <StoreSelector onSelect={(id) => setStoreId(id)} />;
+  }
+
+  const selectedStore = STORES.find((s) => s.id === storeId);
+
   return (
     <>
       <header className="app-header">
@@ -313,6 +340,9 @@ export default function StorePage() {
           <span className="logo-wordmark">s<span className="logo-i">i</span>embras</span>
         </div>
         <div className="spacer" />
+        {selectedStore ? (
+          <span className="store-badge">{selectedStore.emoji} {selectedStore.name}</span>
+        ) : null}
         <Link className="header-link" href="/admin">
           Admin
         </Link>

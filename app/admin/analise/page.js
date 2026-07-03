@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { STORES, DEFAULT_STORE } from '../../../lib/stores';
 
 const PERIODS = [
   { key: 'latest', label: 'Atual vs Última Contagem', mode: 'latest' },
@@ -200,6 +201,7 @@ export default function AnalisePage() {
   const [loadError, setLoadError] = useState('');
   const [periodKey, setPeriodKey] = useState('latest');
   const [search, setSearch] = useState('');
+  const [storeId, setStoreId] = useState(DEFAULT_STORE);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('cosechas_admin_pw');
@@ -260,13 +262,18 @@ export default function AnalisePage() {
     setProducts([]);
   }
 
+  useEffect(() => {
+    if (authed) loadData(password);
+    // eslint-disable-next-line
+  }, [storeId]);
+
   async function loadData(pw) {
     setLoading(true);
     setLoadError('');
     try {
       const [logsRes, productsRes] = await Promise.all([
-        fetch('/api/logs', { headers: { 'x-admin-password': pw }, cache: 'no-store' }),
-        fetch('/api/products', { headers: { 'x-admin-password': pw }, cache: 'no-store' }),
+        fetch('/api/logs', { headers: { 'x-admin-password': pw, 'x-store-id': storeId }, cache: 'no-store' }),
+        fetch('/api/products', { headers: { 'x-admin-password': pw, 'x-store-id': storeId }, cache: 'no-store' }),
       ]);
       if (!logsRes.ok) {
         setLoadError(logsRes.status === 503 ? 'Banco de dados não configurado.' : 'Erro ao carregar histórico.');
@@ -343,6 +350,19 @@ export default function AnalisePage() {
         </nav>
 
         <div className="section-title">Análise de contagens</div>
+
+        <div className="pills">
+          {STORES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`pill${s.id === storeId ? ' active' : ''}`}
+              onClick={() => setStoreId(s.id)}
+            >
+              {s.emoji} {s.name}
+            </button>
+          ))}
+        </div>
 
         <div className="pills">
           {PERIODS.map((p) => (

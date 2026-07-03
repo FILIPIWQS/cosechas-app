@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { STORES, DEFAULT_STORE } from '../../lib/stores';
 
 function ImageField({ value, onChange, label = 'Foto' }) {
   const fileRef = useRef(null);
@@ -74,6 +75,7 @@ export default function AdminPage() {
   const [pwInput, setPwInput] = useState('');
   const [checking, setChecking] = useState(true);
   const [loginError, setLoginError] = useState('');
+  const [storeId, setStoreId] = useState(DEFAULT_STORE);
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -156,7 +158,10 @@ export default function AdminPage() {
   async function loadProducts() {
     setLoading(true);
     try {
-      const res = await fetch('/api/products', { cache: 'no-store' });
+      const res = await fetch('/api/products', {
+        cache: 'no-store',
+        headers: { 'x-store-id': storeId },
+      });
       const data = await res.json();
       setProducts(data.products || []);
     } catch (e) {
@@ -166,8 +171,13 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    if (authed) loadProducts();
+    // eslint-disable-next-line
+  }, [storeId]);
+
   function authHeaders() {
-    return { 'Content-Type': 'application/json', 'x-admin-password': password };
+    return { 'Content-Type': 'application/json', 'x-admin-password': password, 'x-store-id': storeId };
   }
 
   function updateLocal(id, patch) {
@@ -245,14 +255,14 @@ export default function AdminPage() {
     if (editingId === id) setEditingId(null);
     await fetch(`/api/products?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      headers: { 'x-admin-password': password },
+      headers: { 'x-admin-password': password, 'x-store-id': storeId },
     });
   }
 
   async function syncImages() {
     const res = await fetch('/api/sync-images', {
       method: 'POST',
-      headers: { 'x-admin-password': password },
+      headers: { 'x-admin-password': password, 'x-store-id': storeId },
     });
     const data = await res.json();
     if (res.ok) {
@@ -266,7 +276,7 @@ export default function AdminPage() {
   async function syncFornecedores() {
     const res = await fetch('/api/sync-fornecedores', {
       method: 'POST',
-      headers: { 'x-admin-password': password },
+      headers: { 'x-admin-password': password, 'x-store-id': storeId },
     });
     const data = await res.json();
     if (res.ok) {
@@ -281,7 +291,7 @@ export default function AdminPage() {
     if (!confirm('Zerar todas as contagens da loja? Use isto antes de uma nova contagem.')) return;
     const res = await fetch('/api/reset', {
       method: 'POST',
-      headers: { 'x-admin-password': password },
+      headers: { 'x-admin-password': password, 'x-store-id': storeId },
     });
     if (res.ok) setProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
   }
@@ -289,7 +299,10 @@ export default function AdminPage() {
   async function loadLogs() {
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/logs', { headers: { 'x-admin-password': password }, cache: 'no-store' });
+      const res = await fetch('/api/logs', {
+        headers: { 'x-admin-password': password, 'x-store-id': storeId },
+        cache: 'no-store',
+      });
       if (res.ok) {
         const data = await res.json();
         setLogs(data.logs || []);
@@ -417,6 +430,19 @@ export default function AdminPage() {
           <span className="admin-tab active">Produtos</span>
           <Link className="admin-tab" href="/admin/analise">Análise</Link>
         </nav>
+
+        <div className="pills">
+          {STORES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`pill${s.id === storeId ? ' active' : ''}`}
+              onClick={() => setStoreId(s.id)}
+            >
+              {s.emoji} {s.name}
+            </button>
+          ))}
+        </div>
 
         {loading ? (
           <div className="spinner">Carregando…</div>

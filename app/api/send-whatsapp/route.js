@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { STORES, DEFAULT_STORE } from '../../../lib/stores';
 
 export async function POST(req) {
   try {
@@ -6,6 +7,10 @@ export async function POST(req) {
     if (!message) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 });
     }
+
+    const storeId = req.headers.get('x-store-id');
+    const store = STORES.find((s) => s.id === storeId) || STORES.find((s) => s.id === DEFAULT_STORE);
+    const fullMessage = `🏪 ${store.name.toUpperCase()}\n${message}`;
 
     const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
     const numbers = (process.env.WHATSAPP_DESTINATION_NUMBER || '')
@@ -27,7 +32,7 @@ export async function POST(req) {
             'Content-Type': 'application/json',
             apikey: process.env.EVOLUTION_API_KEY,
           },
-          body: JSON.stringify({ number, text: message }),
+          body: JSON.stringify({ number, text: fullMessage }),
         });
 
         console.log('[send-whatsapp] status for', number, res.status);
