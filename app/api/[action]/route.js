@@ -1,26 +1,24 @@
 import { Redis } from '@upstash/redis';
 import { DEFAULT_STORE } from '../../../lib/stores';
+import { getStores } from '../../../lib/storesServer';
 
 const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const redisConfigured = Boolean(url && token);
 const redis = redisConfigured ? new Redis({ url, token }) : null;
 
-// Pre-multi-store keys — kept only so the default store's existing data can be migrated once.
-const LEGACY_ARRAY_KEY = 'cosechas:products';
-const LEGACY_HASH_KEY = 'cosechas:products:hash';
-const LEGACY_LOGS_KEY = 'cosechas:logs';
-const LEGACY_DATE_KEY = 'cosechas:countdate';
-const LEGACY_SEED_VERSION_KEY = 'cosechas:seedver';
+// Global catalog: name/image/fornecedor/frequency are shared across every store.
+const GLOBAL_HASH_KEY = 'siembras:products:hash';
+const GLOBAL_SEED_VERSION_KEY = 'siembras:seedver';
 
-function keysFor(storeId) {
-  return {
-    HASH_KEY: `siembras:${storeId}:products:hash`,
-    LOGS_KEY: `siembras:${storeId}:logs`,
-    DATE_KEY: `siembras:${storeId}:countdate`,
-    SEED_VERSION_KEY: `siembras:${storeId}:seedver`,
-  };
-}
+// Per-store: only counting/par state lives here.
+function countsKeyFor(storeId) { return `siembras:${storeId}:counts`; }
+function logsKeyFor(storeId) { return `siembras:${storeId}:logs`; }
+function dateKeyFor(storeId) { return `siembras:${storeId}:countdate`; }
+
+// Pre-refactor per-store hash that combined catalog + counts — kept only so the
+// default store's existing data can be migrated once into the new layout.
+function legacyStoreHashKeyFor(storeId) { return `siembras:${storeId}:products:hash`; }
 
 // Store ids are managed dynamically (see app/api/stores/route.js), so this only
 // sanitizes the header value to a safe key-namespace segment rather than
@@ -149,105 +147,189 @@ function parseProduct(raw) {
   return raw && typeof raw === 'object' ? raw : null;
 }
 
-// Reads the pre-multi-store products hash (or its own legacy array key), for one-time migration only.
-async function getLegacyProductFields() {
-  const hash = await redis.hgetall(LEGACY_HASH_KEY);
-  if (hash && Object.keys(hash).length > 0) return hash;
-  let legacy = await redis.get(LEGACY_ARRAY_KEY);
-  if (legacy == null) return null;
-  if (typeof legacy === 'string') {
-    try { legacy = JSON.parse(legacy); } catch { return null; }
+// ---------- Global catalog ----------
+
+async function getCatalogRaw() {
+  if (!redis) return [];
+  const hash = await redis.hgetall(GLOBAL_HASH_KEY);
+  if (!hash || Object.keys(hash).length === 0) return [];
+  return Object.values(hash).map(parseProduct).filter(Boolean);
+}
+
+async function saveCatalogProduct(product) {
+  await redis.hset(GLOBAL_HASH_KEY, { [product.id]: JSON.stringify(product) });
+}
+
+// One-time migration: the pre-refactor per-store hash combined catalog fields
+// (name/image/fornecedor/frequency) with counting fields (count/par/etc) for
+// one store at a time. Split it into the new global catalog + that store's counts.
+async function migrateLegacyStoreHash(storeId) {
+  const oldHash = await redis.hgetall(legacyStoreHashKeyFor(storeId));
+  if (!oldHash || Object.keys(oldHash).length === 0) return false;
+
+  const catalogFields = {};
+  const countsFields = {};
+  const now = Date.now();
+  for (const [id, raw] of Object.entries(oldHash)) {
+    const p = parseProduct(raw);
+    if (!p) continue;
+    catalogFields[id] = JSON.stringify({
+      id,
+      name: p.name,
+      unit: p.unit || '',
+      image: p.image || '',
+      fornecedor: p.fornecedor || '',
+      frequency: p.frequency || 'diaria',
+      updatedAt: p.updatedAt || now,
+    });
+    countsFields[id] = JSON.stringify({
+      count: Number(p.count) || 0,
+      countedToday: !!p.countedToday,
+      lastBy: p.lastBy || '',
+      updatedAt: p.updatedAt || now,
+      par: Number(p.par) || 0,
+    });
   }
-  if (!Array.isArray(legacy) || legacy.length === 0) return null;
+  if (Object.keys(catalogFields).length > 0) await redis.hset(GLOBAL_HASH_KEY, catalogFields);
+  if (Object.keys(countsFields).length > 0) await redis.hset(countsKeyFor(storeId), countsFields);
+  return Object.keys(catalogFields).length > 0;
+}
+
+// Guarantees a populated global catalog: use it if present, else migrate the
+// default store's pre-refactor hash, else bootstrap directly from SEED.
+async function ensureCatalog() {
+  let catalog = await getCatalogRaw();
+  if (catalog.length > 0) return catalog;
+
+  const migrated = await migrateLegacyStoreHash(DEFAULT_STORE);
+  if (migrated) {
+    catalog = await getCatalogRaw();
+    if (catalog.length > 0) return catalog;
+  }
+
+  const now = Date.now();
   const fields = {};
-  for (const p of legacy) fields[p.id] = JSON.stringify(p);
-  return fields;
-}
-
-// One-time migration: if this is the default store and its namespaced keys are
-// still empty, copy over data from the pre-multi-store (non-namespaced) keys.
-async function migrateLegacyIfNeeded(storeId, keys) {
-  if (storeId !== DEFAULT_STORE) return;
-  const existingHash = await redis.hgetall(keys.HASH_KEY);
-  if (existingHash && Object.keys(existingHash).length > 0) return;
-  const legacyFields = await getLegacyProductFields();
-  if (!legacyFields) return;
-  await redis.hset(keys.HASH_KEY, legacyFields);
-  const [legacyLogs, legacyDate, legacySeedVer] = await Promise.all([
-    redis.get(LEGACY_LOGS_KEY),
-    redis.get(LEGACY_DATE_KEY),
-    redis.get(LEGACY_SEED_VERSION_KEY),
-  ]);
-  if (legacyLogs != null) await redis.set(keys.LOGS_KEY, legacyLogs);
-  if (legacyDate != null) await redis.set(keys.DATE_KEY, legacyDate);
-  if (legacySeedVer != null) await redis.set(keys.SEED_VERSION_KEY, legacySeedVer);
-}
-
-// Reads all products from the store's hash.
-async function getProducts(keys) {
-  if (!redis) return [];
-  const hash = await redis.hgetall(keys.HASH_KEY);
-  if (hash && Object.keys(hash).length > 0) {
-    return Object.values(hash).map(parseProduct).filter(Boolean);
+  const seeded = SEED.map((s) => {
+    const p = {
+      id: genId(),
+      name: s.name,
+      unit: '',
+      image: s.image || '',
+      fornecedor: s.fornecedor || '',
+      frequency: 'diaria',
+      updatedAt: now,
+    };
+    fields[p.id] = JSON.stringify(p);
+    return p;
+  });
+  if (Object.keys(fields).length > 0) {
+    await redis.hset(GLOBAL_HASH_KEY, fields);
+    await redis.set(GLOBAL_SEED_VERSION_KEY, String(SEED_VERSION));
   }
-  return [];
+  return seeded;
 }
 
-// Atomically updates a single product field in the hash — no other product is touched.
-async function saveProduct(keys, product) {
-  await redis.hset(keys.HASH_KEY, { [product.id]: JSON.stringify(product) });
+// Applies image/fornecedor touch-ups from SEED onto the global catalog, once per SEED_VERSION bump.
+async function syncSeedIfNeeded(catalog) {
+  const ver = Number(await redis.get(GLOBAL_SEED_VERSION_KEY)) || 0;
+  if (ver >= SEED_VERSION) return catalog;
+  const byName = new Map(catalog.map((p) => [p.name, p]));
+  const toUpdate = {};
+  for (const s of SEED) {
+    const ex = byName.get(s.name);
+    if (ex) {
+      let changed = false;
+      if (s.image && ex.image !== s.image) { ex.image = s.image; changed = true; }
+      if (s.fornecedor && !ex.fornecedor) { ex.fornecedor = s.fornecedor; changed = true; }
+      if (changed) toUpdate[ex.id] = JSON.stringify(ex);
+    }
+  }
+  if (Object.keys(toUpdate).length > 0) await redis.hset(GLOBAL_HASH_KEY, toUpdate);
+  await redis.set(GLOBAL_SEED_VERSION_KEY, String(SEED_VERSION));
+  return catalog;
 }
 
-async function getLogs(keys) {
+// ---------- Per-store counts/logs ----------
+
+async function getCounts(storeId) {
+  const hash = await redis.hgetall(countsKeyFor(storeId));
+  const out = {};
+  if (hash) {
+    for (const [id, raw] of Object.entries(hash)) {
+      const c = parseProduct(raw);
+      if (c) out[id] = c;
+    }
+  }
+  return out;
+}
+
+async function getLogs(storeId) {
   if (!redis) return [];
-  let data = await redis.get(keys.LOGS_KEY);
+  let data = await redis.get(logsKeyFor(storeId));
   if (data == null) return [];
   if (typeof data === 'string') {
     try { data = JSON.parse(data); } catch { return []; }
   }
   return Array.isArray(data) ? data : [];
 }
-async function saveLogs(keys, logs) { await redis.set(keys.LOGS_KEY, logs.slice(0, MAX_LOGS)); }
+async function saveLogs(storeId, logs) { await redis.set(logsKeyFor(storeId), logs.slice(0, MAX_LOGS)); }
 
-// Resets all product counts when the calendar day (BRT) changes.
+// Resets this store's counts when the calendar day (BRT) changes.
 // Returns the current countDate string.
-async function ensureCurrentDay(keys) {
+async function ensureCurrentDay(storeId) {
   const today = todayBRT();
-  const stored = await redis.get(keys.DATE_KEY);
+  const dateKey = dateKeyFor(storeId);
+  const stored = await redis.get(dateKey);
   if (stored == null) {
-    await redis.set(keys.DATE_KEY, today);
+    await redis.set(dateKey, today);
     return today;
   }
   if (stored !== today) {
-    const hash = await redis.hgetall(keys.HASH_KEY);
+    const countsKey = countsKeyFor(storeId);
+    const hash = await redis.hgetall(countsKey);
     if (hash && Object.keys(hash).length > 0) {
       const now = Date.now();
       const fields = {};
       for (const [id, raw] of Object.entries(hash)) {
-        const p = parseProduct(raw);
-        if (p) {
-          p.count = 0;
-          p.countedToday = false;
-          p.updatedAt = now;
-          fields[id] = JSON.stringify(p);
+        const c = parseProduct(raw);
+        if (c) {
+          c.count = 0;
+          c.countedToday = false;
+          c.updatedAt = now;
+          fields[id] = JSON.stringify(c);
         }
       }
-      if (Object.keys(fields).length > 0) await redis.hset(keys.HASH_KEY, fields);
+      if (Object.keys(fields).length > 0) await redis.hset(countsKey, fields);
     }
-    await redis.set(keys.DATE_KEY, today);
+    await redis.set(dateKey, today);
   }
   return today;
 }
 
+function mergeProduct(product, countEntry) {
+  const c = countEntry || {};
+  return {
+    id: product.id,
+    name: product.name,
+    unit: product.unit || '',
+    image: product.image || '',
+    fornecedor: product.fornecedor || '',
+    frequency: product.frequency || 'diaria',
+    count: Number(c.count) || 0,
+    par: Number(c.par) || 0,
+    countedToday: !!c.countedToday,
+    lastBy: c.lastBy || '',
+    updatedAt: c.updatedAt || product.updatedAt || 0,
+  };
+}
+
 export async function GET(request, { params }) {
   const storeId = getStoreId(request);
-  const keys = keysFor(storeId);
 
   if (params.action === 'logs') {
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
-    await migrateLegacyIfNeeded(storeId, keys);
-    return Response.json({ logs: await getLogs(keys) });
+    return Response.json({ logs: await getLogs(storeId) });
   }
   if (params.action !== 'products') {
     return Response.json({ error: 'not_found' }, { status: 404 });
@@ -256,26 +338,12 @@ export async function GET(request, { params }) {
     return Response.json({ error: 'db_not_configured' }, { status: 503 });
   }
   try {
-    await migrateLegacyIfNeeded(storeId, keys);
+    let catalog = await ensureCatalog();
+    catalog = await syncSeedIfNeeded(catalog);
     // Day rollover first, then read (so we always return the post-reset state).
-    const countDate = await ensureCurrentDay(keys);
-    const products = await getProducts(keys);
-    const ver = Number(await redis.get(keys.SEED_VERSION_KEY)) || 0;
-    if (ver < SEED_VERSION) {
-      const byName = new Map(products.map((p) => [p.name, p]));
-      const toUpdate = {};
-      for (const s of SEED) {
-        const ex = byName.get(s.name);
-        if (ex) {
-          let changed = false;
-          if (s.image && ex.image !== s.image) { ex.image = s.image; changed = true; }
-          if (s.fornecedor && !ex.fornecedor) { ex.fornecedor = s.fornecedor; changed = true; }
-          if (changed) toUpdate[ex.id] = JSON.stringify(ex);
-        }
-      }
-      if (Object.keys(toUpdate).length > 0) await redis.hset(keys.HASH_KEY, toUpdate);
-      await redis.set(keys.SEED_VERSION_KEY, String(SEED_VERSION));
-    }
+    const countDate = await ensureCurrentDay(storeId);
+    const counts = await getCounts(storeId);
+    const products = catalog.map((p) => mergeProduct(p, counts[p.id]));
     return Response.json({ products, countDate });
   } catch (e) {
     return Response.json({ error: 'read_failed' }, { status: 500 });
@@ -285,7 +353,6 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const action = params.action;
   const storeId = getStoreId(request);
-  const keys = keysFor(storeId);
 
   if (action === 'verify') {
     if (!process.env.ADMIN_PASSWORD) {
@@ -308,23 +375,23 @@ export async function POST(request, { params }) {
       if (Number.isNaN(count) || count < 0) {
         return Response.json({ error: 'invalid_count' }, { status: 400 });
       }
-      await migrateLegacyIfNeeded(storeId, keys);
-      // Handle day rollover, then fetch and update only this product's hash field.
-      const countDate = await ensureCurrentDay(keys);
-      const raw = await redis.hget(keys.HASH_KEY, id);
-      if (!raw) return Response.json({ error: 'not_found' }, { status: 404 });
-      const p = parseProduct(raw);
-      const prev = Number(p.count) || 0;
-      p.count = count;
-      p.countedToday = confirmed;
-      p.lastBy = by;
-      p.updatedAt = Date.now();
-      // Atomic single-field HSET — does not touch any other product.
-      await saveProduct(keys, p);
+      const catalogRaw = await redis.hget(GLOBAL_HASH_KEY, id);
+      if (!catalogRaw) return Response.json({ error: 'not_found' }, { status: 404 });
+      const product = parseProduct(catalogRaw);
+
+      // Handle day rollover, then read/update only this product's counts entry.
+      const countDate = await ensureCurrentDay(storeId);
+      const countsKey = countsKeyFor(storeId);
+      const existingRaw = await redis.hget(countsKey, id);
+      const existing = existingRaw ? parseProduct(existingRaw) : null;
+      const prev = existing ? Number(existing.count) || 0 : 0;
+      const par = existing ? Number(existing.par) || 0 : 0;
+      const entry = { count, countedToday: confirmed, lastBy: by, updatedAt: Date.now(), par };
+      await redis.hset(countsKey, { [id]: JSON.stringify(entry) });
       if (confirmed) {
-        const logs = await getLogs(keys);
-        logs.unshift({ id: genId(), productId: p.id, productName: p.name, prev, next: count, by, ts: Date.now(), date: countDate });
-        await saveLogs(keys, logs);
+        const logs = await getLogs(storeId);
+        logs.unshift({ id: genId(), productId: id, productName: product.name, prev, next: count, by, ts: Date.now(), date: countDate });
+        await saveLogs(storeId, logs);
       }
       return Response.json({ ok: true });
     } catch (e) {
@@ -336,16 +403,15 @@ export async function POST(request, { params }) {
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
-      await migrateLegacyIfNeeded(storeId, keys);
-      const products = await getProducts(keys);
+      const catalog = await ensureCatalog();
       const seedMap = new Map(SEED.filter((s) => s.image).map((s) => [s.name.toLowerCase().trim(), s.image]));
       const toUpdate = {};
       let updated = 0;
-      for (const p of products) {
+      for (const p of catalog) {
         const img = seedMap.get(p.name.toLowerCase().trim());
         if (img && p.image !== img) { p.image = img; toUpdate[p.id] = JSON.stringify(p); updated++; }
       }
-      if (updated > 0) await redis.hset(keys.HASH_KEY, toUpdate);
+      if (updated > 0) await redis.hset(GLOBAL_HASH_KEY, toUpdate);
       return Response.json({ ok: true, updated });
     } catch (e) {
       return Response.json({ error: 'sync_failed' }, { status: 500 });
@@ -356,16 +422,15 @@ export async function POST(request, { params }) {
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
     if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
-      await migrateLegacyIfNeeded(storeId, keys);
-      const products = await getProducts(keys);
+      const catalog = await ensureCatalog();
       const seedMap = new Map(SEED.filter((s) => s.fornecedor).map((s) => [s.name.toLowerCase().trim(), s.fornecedor]));
       const toUpdate = {};
       let updated = 0;
-      for (const p of products) {
+      for (const p of catalog) {
         const forn = seedMap.get(p.name.toLowerCase().trim());
         if (forn && !p.fornecedor) { p.fornecedor = forn; toUpdate[p.id] = JSON.stringify(p); updated++; }
       }
-      if (updated > 0) await redis.hset(keys.HASH_KEY, toUpdate);
+      if (updated > 0) await redis.hset(GLOBAL_HASH_KEY, toUpdate);
       return Response.json({ ok: true, updated });
     } catch (e) {
       return Response.json({ error: 'sync_failed' }, { status: 500 });
@@ -374,19 +439,25 @@ export async function POST(request, { params }) {
 
   if (action === 'reset') {
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
+    if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
-      await migrateLegacyIfNeeded(storeId, keys);
-      const products = await getProducts(keys);
+      const countsKey = countsKeyFor(storeId);
+      const hash = await redis.hgetall(countsKey);
       const now = Date.now();
       const fields = {};
-      for (const p of products) {
-        p.count = 0;
-        p.countedToday = false;
-        p.updatedAt = now;
-        fields[p.id] = JSON.stringify(p);
+      if (hash) {
+        for (const [id, raw] of Object.entries(hash)) {
+          const c = parseProduct(raw);
+          if (c) {
+            c.count = 0;
+            c.countedToday = false;
+            c.updatedAt = now;
+            fields[id] = JSON.stringify(c);
+          }
+        }
       }
-      if (Object.keys(fields).length > 0) await redis.hset(keys.HASH_KEY, fields);
-      await redis.set(keys.DATE_KEY, todayBRT());
+      if (Object.keys(fields).length > 0) await redis.hset(countsKey, fields);
+      await redis.set(dateKeyFor(storeId), todayBRT());
       return Response.json({ ok: true });
     } catch (e) {
       return Response.json({ error: 'reset_failed' }, { status: 500 });
@@ -395,8 +466,8 @@ export async function POST(request, { params }) {
 
   if (action === 'products') {
     if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
+    if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
     try {
-      await migrateLegacyIfNeeded(storeId, keys);
       const body = await request.json();
       const name = String(body.name || '').trim();
       if (!name) return Response.json({ error: 'name_required' }, { status: 400 });
@@ -405,17 +476,13 @@ export async function POST(request, { params }) {
         id: genId(),
         name,
         unit: String(body.unit || '').trim(),
-        par: Math.max(0, Number(body.par) || 0),
-        count: 0,
         image: String(body.image || '').trim(),
         fornecedor: String(body.fornecedor || '').trim(),
         frequency: freq,
-        countedToday: false,
-        lastBy: '',
         updatedAt: Date.now(),
       };
-      await saveProduct(keys, product);
-      return Response.json({ product });
+      await saveCatalogProduct(product);
+      return Response.json({ product: mergeProduct(product, null) });
     } catch (e) {
       return Response.json({ error: 'create_failed' }, { status: 500 });
     }
@@ -424,27 +491,43 @@ export async function POST(request, { params }) {
   return Response.json({ error: 'not_found' }, { status: 404 });
 }
 
+// Handles both catalog edits (name/unit/image/fornecedor/frequency, global) and
+// par edits (per store, via x-store-id) — the two admin tabs that write here
+// only ever send the fields relevant to what they're editing.
 export async function PUT(request, { params }) {
   if (params.action !== 'products') return Response.json({ error: 'not_found' }, { status: 404 });
   if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const storeId = getStoreId(request);
-  const keys = keysFor(storeId);
+  if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
   try {
-    await migrateLegacyIfNeeded(storeId, keys);
     const body = await request.json();
     if (!body.id) return Response.json({ error: 'id_required' }, { status: 400 });
-    const raw = await redis.hget(keys.HASH_KEY, body.id);
+    const raw = await redis.hget(GLOBAL_HASH_KEY, body.id);
     if (!raw) return Response.json({ error: 'not_found' }, { status: 404 });
     const p = parseProduct(raw);
-    if (body.name !== undefined) p.name = String(body.name).trim();
-    if (body.unit !== undefined) p.unit = String(body.unit).trim();
-    if (body.par !== undefined) p.par = Math.max(0, Number(body.par) || 0);
-    if (body.image !== undefined) p.image = String(body.image).trim();
-    if (body.fornecedor !== undefined) p.fornecedor = String(body.fornecedor).trim();
-    if (body.frequency !== undefined && FREQS.includes(body.frequency)) p.frequency = body.frequency;
-    p.updatedAt = Date.now();
-    await saveProduct(keys, p);
-    return Response.json({ product: p });
+
+    let catalogChanged = false;
+    if (body.name !== undefined) { p.name = String(body.name).trim(); catalogChanged = true; }
+    if (body.unit !== undefined) { p.unit = String(body.unit).trim(); catalogChanged = true; }
+    if (body.image !== undefined) { p.image = String(body.image).trim(); catalogChanged = true; }
+    if (body.fornecedor !== undefined) { p.fornecedor = String(body.fornecedor).trim(); catalogChanged = true; }
+    if (body.frequency !== undefined && FREQS.includes(body.frequency)) { p.frequency = body.frequency; catalogChanged = true; }
+    if (catalogChanged) {
+      p.updatedAt = Date.now();
+      await saveCatalogProduct(p);
+    }
+
+    let countEntry = null;
+    if (body.par !== undefined) {
+      const storeId = getStoreId(request);
+      const countsKey = countsKeyFor(storeId);
+      const existingRaw = await redis.hget(countsKey, body.id);
+      countEntry = existingRaw ? parseProduct(existingRaw) : { count: 0, countedToday: false, lastBy: '', updatedAt: 0, par: 0 };
+      countEntry.par = Math.max(0, Number(body.par) || 0);
+      countEntry.updatedAt = Date.now();
+      await redis.hset(countsKey, { [body.id]: JSON.stringify(countEntry) });
+    }
+
+    return Response.json({ product: mergeProduct(p, countEntry) });
   } catch (e) {
     return Response.json({ error: 'update_failed' }, { status: 500 });
   }
@@ -453,12 +536,17 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   if (params.action !== 'products') return Response.json({ error: 'not_found' }, { status: 404 });
   if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const keys = keysFor(getStoreId(request));
+  if (!redisConfigured) return Response.json({ error: 'db_not_configured' }, { status: 503 });
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return Response.json({ error: 'id_required' }, { status: 400 });
-    await redis.hdel(keys.HASH_KEY, id);
+    await redis.hdel(GLOBAL_HASH_KEY, id);
+    // Best-effort cleanup of this product's counts entry across every known store.
+    try {
+      const stores = await getStores();
+      await Promise.all(stores.map((s) => redis.hdel(countsKeyFor(s.id), id)));
+    } catch (e) { /* cleanup is best-effort */ }
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ error: 'delete_failed' }, { status: 500 });

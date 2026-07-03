@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { DEFAULT_STORE } from '../../lib/stores';
 
 function ImageField({ value, onChange, label = 'Foto' }) {
@@ -69,20 +70,36 @@ function buyQty(p) {
   return Math.max(0, (Number(p.par) || 0) - (Number(p.count) || 0));
 }
 
+function TabSync({ onTab }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'produtos' || tab === 'compras' || tab === 'lojas') onTab(tab);
+    // eslint-disable-next-line
+  }, [searchParams]);
+  return null;
+}
+
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState('');
   const [pwInput, setPwInput] = useState('');
   const [checking, setChecking] = useState(true);
   const [loginError, setLoginError] = useState('');
-  const [storeId, setStoreId] = useState(DEFAULT_STORE);
-  const [stores, setStores] = useState([]);
-  const [view, setView] = useState('produtos'); // produtos | lojas
+  const [view, setView] = useState('produtos'); // produtos | compras | lojas
 
+  // catálogo global (aba Produtos)
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // contagens por loja (aba Compras)
+  const [storeId, setStoreId] = useState(DEFAULT_STORE);
+  const [stores, setStores] = useState([]);
+  const [storeProducts, setStoreProducts] = useState([]);
+  const [loadingStoreProducts, setLoadingStoreProducts] = useState(false);
+  const [comprasSearch, setComprasSearch] = useState('');
 
   // lojas
   const [newStoreName, setNewStoreName] = useState('');
@@ -93,15 +110,14 @@ export default function AdminPage() {
 
   // novo produto
   const [newName, setNewName] = useState('');
-  const [newPar, setNewPar] = useState('');
   const [newImage, setNewImage] = useState('');
   const [newFornecedor, setNewFornecedor] = useState('');
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', image: '', par: '', fornecedor: '' });
+  const [editData, setEditData] = useState({ name: '', image: '', fornecedor: '' });
 
-  // histórico de contagens
+  // histórico de contagens (por loja)
   const [logs, setLogs] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -174,15 +190,23 @@ export default function AdminPage() {
     setPassword('');
     setPwInput('');
     setProducts([]);
+    setStoreProducts([]);
   }
+
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'x-admin-password': password };
+  }
+
+  function storeAuthHeaders() {
+    return { 'Content-Type': 'application/json', 'x-admin-password': password, 'x-store-id': storeId };
+  }
+
+  // ---------- Catálogo global (Produtos) ----------
 
   async function loadProducts() {
     setLoading(true);
     try {
-      const res = await fetch('/api/products', {
-        cache: 'no-store',
-        headers: { 'x-store-id': storeId },
-      });
+      const res = await fetch('/api/products', { cache: 'no-store' });
       const data = await res.json();
       setProducts(data.products || []);
     } catch (e) {
@@ -190,15 +214,6 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    if (authed) loadProducts();
-    // eslint-disable-next-line
-  }, [storeId]);
-
-  function authHeaders() {
-    return { 'Content-Type': 'application/json', 'x-admin-password': password, 'x-store-id': storeId };
   }
 
   function updateLocal(id, patch) {
@@ -214,7 +229,6 @@ export default function AdminPage() {
       headers: authHeaders(),
       body: JSON.stringify({
         name,
-        par: Number(newPar) || 0,
         image: newImage.trim(),
         fornecedor: newFornecedor.trim(),
       }),
@@ -223,21 +237,10 @@ export default function AdminPage() {
       const data = await res.json();
       setProducts((prev) => [...prev, data.product]);
       setNewName('');
-      setNewPar('');
       setNewImage('');
       setNewFornecedor('');
+      loadStoreProducts();
     }
-  }
-
-  async function updatePar(id, par) {
-    let value = parseInt(par, 10);
-    if (Number.isNaN(value) || value < 0) value = 0;
-    updateLocal(id, { par: value });
-    await fetch('/api/products', {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: JSON.stringify({ id, par: value }),
-    });
   }
 
   function startEdit(p) {
@@ -245,7 +248,6 @@ export default function AdminPage() {
     setEditData({
       name: p.name || '',
       image: p.image || '',
-      par: String(Number(p.par) || 0),
       fornecedor: p.fornecedor || '',
     });
   }
@@ -257,38 +259,40 @@ export default function AdminPage() {
   async function saveEdit(id) {
     const name = editData.name.trim();
     if (!name) return;
-    const par = Math.max(0, Number(editData.par) || 0);
     const image = editData.image.trim();
     const fornecedor = editData.fornecedor.trim();
-    updateLocal(id, { name, image, par, fornecedor });
+    updateLocal(id, { name, image, fornecedor });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, image, par, fornecedor }),
+      body: JSON.stringify({ id, name, image, fornecedor }),
     });
+    loadStoreProducts();
   }
 
   async function removeProduct(id) {
     const p = products.find((x) => x.id === id);
-    if (!confirm(`Excluir "${p?.name}"? Essa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Excluir "${p?.name}" do catálogo global? Isso remove o produto de todas as lojas.`)) return;
     setProducts((prev) => prev.filter((x) => x.id !== id));
     if (editingId === id) setEditingId(null);
     await fetch(`/api/products?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      headers: { 'x-admin-password': password, 'x-store-id': storeId },
+      headers: authHeaders(),
     });
+    loadStoreProducts();
   }
 
   async function syncImages() {
     const res = await fetch('/api/sync-images', {
       method: 'POST',
-      headers: { 'x-admin-password': password, 'x-store-id': storeId },
+      headers: authHeaders(),
     });
     const data = await res.json();
     if (res.ok) {
       alert(`Fotos sincronizadas: ${data.updated} produto(s) atualizado(s).`);
       loadProducts();
+      loadStoreProducts();
     } else {
       alert('Erro ao sincronizar fotos.');
     }
@@ -297,31 +301,70 @@ export default function AdminPage() {
   async function syncFornecedores() {
     const res = await fetch('/api/sync-fornecedores', {
       method: 'POST',
-      headers: { 'x-admin-password': password, 'x-store-id': storeId },
+      headers: authHeaders(),
     });
     const data = await res.json();
     if (res.ok) {
       alert(`Fornecedores sincronizados: ${data.updated} produto(s) atualizado(s).`);
       loadProducts();
+      loadStoreProducts();
     } else {
       alert('Erro ao sincronizar fornecedores.');
     }
+  }
+
+  // ---------- Contagens por loja (Compras) ----------
+
+  async function loadStoreProducts() {
+    setLoadingStoreProducts(true);
+    try {
+      const res = await fetch('/api/products', {
+        cache: 'no-store',
+        headers: { 'x-store-id': storeId },
+      });
+      const data = await res.json();
+      setStoreProducts(data.products || []);
+    } catch (e) {
+      /* noop */
+    } finally {
+      setLoadingStoreProducts(false);
+    }
+  }
+
+  useEffect(() => {
+    if (authed) loadStoreProducts();
+    // eslint-disable-next-line
+  }, [storeId, authed]);
+
+  function updateStoreLocal(id, patch) {
+    setStoreProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  async function updatePar(id, par) {
+    let value = parseInt(par, 10);
+    if (Number.isNaN(value) || value < 0) value = 0;
+    updateStoreLocal(id, { par: value });
+    await fetch('/api/products', {
+      method: 'PUT',
+      headers: storeAuthHeaders(),
+      body: JSON.stringify({ id, par: value }),
+    });
   }
 
   async function resetCounts() {
     if (!confirm('Zerar todas as contagens da loja? Use isto antes de uma nova contagem.')) return;
     const res = await fetch('/api/reset', {
       method: 'POST',
-      headers: { 'x-admin-password': password, 'x-store-id': storeId },
+      headers: storeAuthHeaders(),
     });
-    if (res.ok) setProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
+    if (res.ok) setStoreProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
   }
 
   async function loadLogs() {
     setLoadingLogs(true);
     try {
       const res = await fetch('/api/logs', {
-        headers: { 'x-admin-password': password, 'x-store-id': storeId },
+        headers: storeAuthHeaders(),
         cache: 'no-store',
       });
       if (res.ok) {
@@ -352,6 +395,8 @@ export default function AdminPage() {
       setTimeout(() => setCopied(false), 1600);
     });
   }
+
+  // ---------- Lojas ----------
 
   async function createStore(e) {
     e.preventDefault();
@@ -458,7 +503,7 @@ export default function AdminPage() {
   }
 
   // ---------- PAINEL ----------
-  const toBuy = products.filter((p) => buyQty(p) > 0);
+  const toBuy = storeProducts.filter((p) => buyQty(p) > 0);
 
   const groupedToBuy = toBuy.reduce((acc, p) => {
     const key = p.fornecedor || 'Sem fornecedor';
@@ -478,8 +523,16 @@ export default function AdminPage() {
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
 
+  const visibleStoreProducts = storeProducts
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+    .filter((p) => p.name.toLowerCase().includes(comprasSearch.trim().toLowerCase()));
+
   return (
     <>
+      <Suspense fallback={null}>
+        <TabSync onTab={setView} />
+      </Suspense>
       <header className="app-header">
         <div className="logo-lockup">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 248" height="38" aria-hidden="true" style={{display:'block',flexShrink:0}}>
@@ -511,12 +564,19 @@ export default function AdminPage() {
           </button>
           <button
             type="button"
+            className={`admin-tab${view === 'compras' ? ' active' : ''}`}
+            onClick={() => setView('compras')}
+          >
+            Compras
+          </button>
+          <Link className="admin-tab" href="/admin/analise">Análise</Link>
+          <button
+            type="button"
             className={`admin-tab${view === 'lojas' ? ' active' : ''}`}
             onClick={() => setView('lojas')}
           >
             Lojas
           </button>
-          <Link className="admin-tab" href="/admin/analise">Análise</Link>
         </nav>
 
         {view === 'lojas' ? (
@@ -584,7 +644,7 @@ export default function AdminPage() {
 
             {stores.length === 0 ? <div className="empty">Nenhuma loja cadastrada.</div> : null}
           </>
-        ) : (
+        ) : view === 'compras' ? (
           <>
             <div className="pills">
               {stores.map((s) => (
@@ -599,239 +659,258 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {loading ? (
+            {loadingStoreProducts ? (
               <div className="spinner">Carregando…</div>
             ) : (
               <>
                 <div className="section-title">O que comprar</div>
-            <div className="report">
-              <div className="report-head">
-                <h2>Lista de reposição</h2>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {toBuy.length > 0 ? <span className="count-pill">{toBuy.length} item(ns)</span> : null}
-                  <button className="btn btn-citrus btn-sm" onClick={copyList} disabled={toBuy.length === 0}>
-                    {copied ? '✓ Copiado' : 'Copiar lista'}
+                <div className="report">
+                  <div className="report-head">
+                    <h2>Lista de reposição</h2>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {toBuy.length > 0 ? <span className="count-pill">{toBuy.length} item(ns)</span> : null}
+                      <button className="btn btn-citrus btn-sm" onClick={copyList} disabled={toBuy.length === 0}>
+                        {copied ? '✓ Copiado' : 'Copiar lista'}
+                      </button>
+                    </div>
+                  </div>
+                  {toBuy.length === 0 ? (
+                    <div className="empty">Tudo abastecido 🎉 (nada a comprar no momento)</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Produto</th>
+                          <th className="num">Contado</th>
+                          <th className="num">Regulador</th>
+                          <th className="num">Comprar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedGroups.map(([supplier, items]) => (
+                          <Fragment key={supplier}>
+                            <tr className="supplier-row">
+                              <td colSpan={4} className="supplier-cell">{supplier}</td>
+                            </tr>
+                            {items.map((p) => (
+                              <tr key={p.id} className="row-go">
+                                <td>{p.name}</td>
+                                <td className="num">{Number(p.count) || 0}</td>
+                                <td className="num">{Number(p.par) || 0}</td>
+                                <td className="num">
+                                  <span className="buy-qty go">{buyQty(p)}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="section-title">Reguladores e contagens</div>
+
+                <div className="toolbar">
+                  <button className="btn btn-ghost btn-sm" onClick={loadStoreProducts}>
+                    ↻ Atualizar contagens
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={resetCounts}>
+                    Zerar contagens da loja
                   </button>
                 </div>
-              </div>
-              {toBuy.length === 0 ? (
-                <div className="empty">Tudo abastecido 🎉 (nada a comprar no momento)</div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Produto</th>
-                      <th className="num">Contado</th>
-                      <th className="num">Regulador</th>
-                      <th className="num">Comprar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedGroups.map(([supplier, items]) => (
-                      <Fragment key={supplier}>
-                        <tr className="supplier-row">
-                          <td colSpan={4} className="supplier-cell">{supplier}</td>
-                        </tr>
-                        {items.map((p) => (
-                          <tr key={p.id} className="row-go">
-                            <td>{p.name}</td>
-                            <td className="num">{Number(p.count) || 0}</td>
-                            <td className="num">{Number(p.par) || 0}</td>
-                            <td className="num">
-                              <span className="buy-qty go">{buyQty(p)}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
 
-            <div className="section-title">Gerenciar produtos</div>
-
-            <div className="toolbar">
-              <button className="btn btn-ghost btn-sm" onClick={loadProducts}>
-                ↻ Atualizar contagens
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={resetCounts}>
-                Zerar contagens da loja
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={syncImages}>
-                Sincronizar fotos
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={syncFornecedores}>
-                Sincronizar fornecedores
-              </button>
-            </div>
-
-            <form className="add-form" onSubmit={addProduct}>
-              <div className="field field-name">
-                <label>Novo produto</label>
                 <input
-                  type="text"
-                  placeholder="Ex.: Polpa de morango"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  className="search"
+                  type="search"
+                  placeholder={`🔍 Buscar entre ${storeProducts.length} produtos…`}
+                  value={comprasSearch}
+                  onChange={(e) => setComprasSearch(e.target.value)}
                 />
-              </div>
-              <div className="field">
-                <label>Regulador</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={newPar}
-                  onChange={(e) => setNewPar(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>Fornecedor</label>
-                <input
-                  type="text"
-                  placeholder="Ex.: Nechio"
-                  value={newFornecedor}
-                  onChange={(e) => setNewFornecedor(e.target.value)}
-                />
-              </div>
-              <ImageField label="Foto (opcional)" value={newImage} onChange={setNewImage} />
-              <button className="btn btn-primary" type="submit">
-                Adicionar
-              </button>
-            </form>
 
-            <input
-              className="search"
-              type="search"
-              placeholder={`🔍 Buscar entre ${products.length} produtos…`}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-
-            {visible.map((p) =>
-              editingId === p.id ? (
-                <div className="padmin editing" key={p.id}>
-                  <div className="edit-grid">
-                    <div className="field field-full">
-                      <label>Descrição</label>
-                      <input
-                        type="text"
-                        value={editData.name}
-                        onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                      />
+                {visibleStoreProducts.map((p) => (
+                  <div className="padmin" key={p.id}>
+                    {p.image ? <img className="thumb thumb-sm" src={p.image} alt="" /> : null}
+                    <div className="info">
+                      <div className="pname">{p.name}</div>
+                      <div className="punit">
+                        {p.fornecedor ? <span style={{ color: 'var(--muted)' }}>{p.fornecedor} · </span> : null}
+                        contado: {Number(p.count) || 0}
+                        {p.lastBy ? ' · por ' + p.lastBy : ''}
+                      </div>
                     </div>
-                    <div className="field">
-                      <label>Regulador</label>
+                    <div className="par-edit">
+                      <label htmlFor={`par-${p.id}`}>Regulador</label>
                       <input
+                        id={`par-${p.id}`}
+                        className="par-input"
                         type="number"
                         min="0"
-                        value={editData.par}
-                        onChange={(e) => setEditData({ ...editData, par: e.target.value })}
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Fornecedor</label>
-                      <input
-                        type="text"
-                        value={editData.fornecedor}
-                        onChange={(e) => setEditData({ ...editData, fornecedor: e.target.value })}
-                      />
-                    </div>
-                    <div className="field-full">
-                      <ImageField
-                        label="Foto"
-                        value={editData.image}
-                        onChange={(v) => setEditData({ ...editData, image: v })}
+                        defaultValue={Number(p.par) || 0}
+                        key={`par-${p.id}-${p.par}`}
+                        onBlur={(e) => updatePar(p.id, e.target.value)}
                       />
                     </div>
                   </div>
-                  <div className="edit-actions">
-                    <button className="btn btn-primary btn-sm" onClick={() => saveEdit(p.id)}>
-                      Salvar
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={cancelEdit}>
-                      Cancelar
-                    </button>
+                ))}
+
+                {visibleStoreProducts.length === 0 ? (
+                  <div className="empty">Nenhum produto encontrado para "{comprasSearch}".</div>
+                ) : null}
+
+                <div className="section-title">Histórico de contagens</div>
+                <button className="btn btn-ghost btn-sm" onClick={toggleHistory}>
+                  {historyOpen ? 'Ocultar histórico' : 'Ver histórico'}
+                </button>
+                {historyOpen ? (
+                  <div className="report" style={{ marginTop: 12 }}>
+                    {loadingLogs ? (
+                      <div className="empty">Carregando…</div>
+                    ) : logs.length === 0 ? (
+                      <div className="empty">Nenhuma contagem registrada ainda.</div>
+                    ) : (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Data/Hora</th>
+                            <th>Produto</th>
+                            <th>Quem</th>
+                            <th className="num">Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {logs.map((l) => (
+                            <tr key={l.id}>
+                              <td>{new Date(l.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
+                              <td>{l.productName}</td>
+                              <td>{l.by || '—'}</td>
+                              <td className="num">{l.next}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
+                ) : null}
+
+                <div className="foot-link">
+                  <Link href="/">← Ir para a tela de contagem</Link>
                 </div>
-              ) : (
-                <div className="padmin" key={p.id}>
-                  {p.image ? <img className="thumb thumb-sm" src={p.image} alt="" /> : null}
-                  <div className="info">
-                    <div className="pname">{p.name}</div>
-                    <div className="punit">
-                      {p.fornecedor ? <span style={{ color: 'var(--muted)' }}>{p.fornecedor} · </span> : null}
-                      contado: {Number(p.count) || 0}
-                      {p.lastBy ? ' · por ' + p.lastBy : ''}
-                    </div>
-                  </div>
-                  <div className="par-edit">
-                    <label htmlFor={`par-${p.id}`}>Regulador</label>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {loading ? (
+              <div className="spinner">Carregando…</div>
+            ) : (
+              <>
+                <div className="toolbar">
+                  <button className="btn btn-ghost btn-sm" onClick={loadProducts}>
+                    ↻ Atualizar
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={syncImages}>
+                    Sincronizar fotos
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={syncFornecedores}>
+                    Sincronizar fornecedores
+                  </button>
+                </div>
+
+                <form className="add-form" onSubmit={addProduct}>
+                  <div className="field field-name">
+                    <label>Novo produto</label>
                     <input
-                      id={`par-${p.id}`}
-                      className="par-input"
-                      type="number"
-                      min="0"
-                      defaultValue={Number(p.par) || 0}
-                      key={`par-${p.id}-${p.par}`}
-                      onBlur={(e) => updatePar(p.id, e.target.value)}
+                      type="text"
+                      placeholder="Ex.: Polpa de morango"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
                     />
                   </div>
-                  <div className="row-actions">
-                    <button className="btn btn-edit btn-sm" onClick={() => startEdit(p)}>
-                      Editar
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => removeProduct(p.id)}>
-                      Excluir
-                    </button>
+                  <div className="field">
+                    <label>Fornecedor</label>
+                    <input
+                      type="text"
+                      placeholder="Ex.: Nechio"
+                      value={newFornecedor}
+                      onChange={(e) => setNewFornecedor(e.target.value)}
+                    />
                   </div>
-                </div>
-              )
-            )}
+                  <ImageField label="Foto (opcional)" value={newImage} onChange={setNewImage} />
+                  <button className="btn btn-primary" type="submit">
+                    Adicionar
+                  </button>
+                </form>
 
-            {visible.length === 0 ? (
-              <div className="empty">Nenhum produto encontrado para "{search}".</div>
-            ) : null}
+                <input
+                  className="search"
+                  type="search"
+                  placeholder={`🔍 Buscar entre ${products.length} produtos…`}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
 
-            <div className="section-title">Histórico de contagens</div>
-            <button className="btn btn-ghost btn-sm" onClick={toggleHistory}>
-              {historyOpen ? 'Ocultar histórico' : 'Ver histórico'}
-            </button>
-            {historyOpen ? (
-              <div className="report" style={{ marginTop: 12 }}>
-                {loadingLogs ? (
-                  <div className="empty">Carregando…</div>
-                ) : logs.length === 0 ? (
-                  <div className="empty">Nenhuma contagem registrada ainda.</div>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Data/Hora</th>
-                        <th>Produto</th>
-                        <th>Quem</th>
-                        <th className="num">Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((l) => (
-                        <tr key={l.id}>
-                          <td>{new Date(l.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
-                          <td>{l.productName}</td>
-                          <td>{l.by || '—'}</td>
-                          <td className="num">{l.next}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {visible.map((p) =>
+                  editingId === p.id ? (
+                    <div className="padmin editing" key={p.id}>
+                      <div className="edit-grid">
+                        <div className="field field-full">
+                          <label>Descrição</label>
+                          <input
+                            type="text"
+                            value={editData.name}
+                            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                          />
+                        </div>
+                        <div className="field">
+                          <label>Fornecedor</label>
+                          <input
+                            type="text"
+                            value={editData.fornecedor}
+                            onChange={(e) => setEditData({ ...editData, fornecedor: e.target.value })}
+                          />
+                        </div>
+                        <div className="field-full">
+                          <ImageField
+                            label="Foto"
+                            value={editData.image}
+                            onChange={(v) => setEditData({ ...editData, image: v })}
+                          />
+                        </div>
+                      </div>
+                      <div className="edit-actions">
+                        <button className="btn btn-primary btn-sm" onClick={() => saveEdit(p.id)}>
+                          Salvar
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={cancelEdit}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="padmin" key={p.id}>
+                      {p.image ? <img className="thumb thumb-sm" src={p.image} alt="" /> : null}
+                      <div className="info">
+                        <div className="pname">{p.name}</div>
+                        <div className="punit">
+                          {p.fornecedor || 'Sem fornecedor'}
+                        </div>
+                      </div>
+                      <div className="row-actions">
+                        <button className="btn btn-edit btn-sm" onClick={() => startEdit(p)}>
+                          Editar
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => removeProduct(p.id)}>
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
-              </div>
-            ) : null}
 
-            <div className="foot-link">
-              <Link href="/">← Ir para a tela de contagem</Link>
-            </div>
+                {visible.length === 0 ? (
+                  <div className="empty">Nenhum produto encontrado para "{search}".</div>
+                ) : null}
               </>
             )}
           </>

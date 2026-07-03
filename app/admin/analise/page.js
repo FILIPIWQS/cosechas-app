@@ -350,8 +350,10 @@ export default function AnalisePage() {
       <Header onLogout={logout} />
       <main className="wrap">
         <nav className="admin-tabs">
-          <Link className="admin-tab" href="/admin">Produtos</Link>
+          <Link className="admin-tab" href="/admin?tab=produtos">Produtos</Link>
+          <Link className="admin-tab" href="/admin?tab=compras">Compras</Link>
           <span className="admin-tab active">Análise</span>
+          <Link className="admin-tab" href="/admin?tab=lojas">Lojas</Link>
         </nav>
 
         <div className="section-title">Análise de contagens</div>
