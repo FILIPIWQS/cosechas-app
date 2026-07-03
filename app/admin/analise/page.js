@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { STORES, DEFAULT_STORE } from '../../../lib/stores';
+import { DEFAULT_STORE } from '../../../lib/stores';
 
 const PERIODS = [
   { key: 'latest', label: 'Atual vs Última Contagem', mode: 'latest' },
@@ -202,6 +202,7 @@ export default function AnalisePage() {
   const [periodKey, setPeriodKey] = useState('latest');
   const [search, setSearch] = useState('');
   const [storeId, setStoreId] = useState(DEFAULT_STORE);
+  const [stores, setStores] = useState([]);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('cosechas_admin_pw');
@@ -219,6 +220,10 @@ export default function AnalisePage() {
     } else {
       setChecking(false);
     }
+    fetch('/api/stores', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => setStores(data.stores || []))
+      .catch(() => {});
   }, []);
 
   async function verify(pw) {
@@ -352,14 +357,14 @@ export default function AnalisePage() {
         <div className="section-title">Análise de contagens</div>
 
         <div className="pills">
-          {STORES.map((s) => (
+          {stores.map((s) => (
             <button
               key={s.id}
               type="button"
               className={`pill${s.id === storeId ? ' active' : ''}`}
               onClick={() => setStoreId(s.id)}
             >
-              {s.emoji} {s.name}
+              {s.name}
             </button>
           ))}
         </div>

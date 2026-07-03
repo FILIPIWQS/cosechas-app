@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import { STORES, DEFAULT_STORE } from '../../../lib/stores';
+import { DEFAULT_STORE } from '../../../lib/stores';
 
 const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -22,9 +22,12 @@ function keysFor(storeId) {
   };
 }
 
+// Store ids are managed dynamically (see app/api/stores/route.js), so this only
+// sanitizes the header value to a safe key-namespace segment rather than
+// checking it against a fixed list.
 function getStoreId(request) {
   const id = request.headers.get('x-store-id');
-  return STORES.some((s) => s.id === id) ? id : DEFAULT_STORE;
+  return id && /^[a-z0-9-]{1,64}$/i.test(id) ? id : DEFAULT_STORE;
 }
 
 const SEED_VERSION = 6;

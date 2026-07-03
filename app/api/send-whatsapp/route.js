@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { STORES, DEFAULT_STORE } from '../../../lib/stores';
+import { DEFAULT_STORE } from '../../../lib/stores';
+import { getStores } from '../../../lib/storesServer';
 
 export async function POST(req) {
   try {
@@ -9,8 +10,9 @@ export async function POST(req) {
     }
 
     const storeId = req.headers.get('x-store-id');
-    const store = STORES.find((s) => s.id === storeId) || STORES.find((s) => s.id === DEFAULT_STORE);
-    const fullMessage = `🏪 ${store.name.toUpperCase()}\n${message}`;
+    const stores = await getStores();
+    const store = stores.find((s) => s.id === storeId) || stores.find((s) => s.id === DEFAULT_STORE) || stores[0];
+    const fullMessage = `${store.name.toUpperCase()}\n${message}`;
 
     const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
     const numbers = (process.env.WHATSAPP_DESTINATION_NUMBER || '')

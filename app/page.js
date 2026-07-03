@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import StoreSelector from './components/StoreSelector';
-import { STORES } from '../lib/stores';
 
 function playAlert() {
   try {
@@ -38,6 +37,7 @@ function formatDate(iso) {
 export default function StorePage() {
   const [storeId, setStoreId] = useState('');
   const [storeChecked, setStoreChecked] = useState(false);
+  const [storeName, setStoreName] = useState('');
   const storeIdRef = useRef('');
 
   const [products, setProducts] = useState([]);
@@ -79,7 +79,7 @@ export default function StorePage() {
     else setNotifPerm('unsupported');
     try {
       const savedStore = localStorage.getItem('siembras_store');
-      if (savedStore && STORES.some((s) => s.id === savedStore)) {
+      if (savedStore && /^[a-z0-9-]{1,64}$/i.test(savedStore)) {
         setStoreId(savedStore);
       }
     } catch (e) {}
@@ -91,9 +91,25 @@ export default function StorePage() {
 
   useEffect(() => {
     storeIdRef.current = storeId;
-    if (storeId) load();
+    if (!storeId) return;
+    load();
+    fetch('/api/stores', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        const s = (data.stores || []).find((x) => x.id === storeIdRef.current);
+        setStoreName(s ? s.name : '');
+      })
+      .catch(() => {});
     // eslint-disable-next-line
   }, [storeId]);
+
+  function trocarLoja() {
+    try {
+      localStorage.removeItem('siembras_store');
+    } catch (e) {}
+    setStoreId('');
+    setStoreName('');
+  }
 
   // Lembrete a cada 5 minutos se a contagem não terminou
   useEffect(() => {
@@ -321,8 +337,6 @@ export default function StorePage() {
     return <StoreSelector onSelect={(id) => setStoreId(id)} />;
   }
 
-  const selectedStore = STORES.find((s) => s.id === storeId);
-
   return (
     <>
       <header className="app-header">
@@ -340,8 +354,13 @@ export default function StorePage() {
           <span className="logo-wordmark">s<span className="logo-i">i</span>embras</span>
         </div>
         <div className="spacer" />
-        {selectedStore ? (
-          <span className="store-badge">{selectedStore.emoji} {selectedStore.name}</span>
+        {storeName ? (
+          <span className="store-badge">
+            {storeName}
+            <button type="button" className="store-switch-btn" onClick={trocarLoja}>
+              Trocar
+            </button>
+          </span>
         ) : null}
         <Link className="header-link" href="/admin">
           Admin

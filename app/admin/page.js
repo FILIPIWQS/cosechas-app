@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { STORES, DEFAULT_STORE } from '../../lib/stores';
+import { DEFAULT_STORE } from '../../lib/stores';
 
 function ImageField({ value, onChange, label = 'Foto' }) {
   const fileRef = useRef(null);
@@ -76,11 +76,20 @@ export default function AdminPage() {
   const [checking, setChecking] = useState(true);
   const [loginError, setLoginError] = useState('');
   const [storeId, setStoreId] = useState(DEFAULT_STORE);
+  const [stores, setStores] = useState([]);
+  const [view, setView] = useState('produtos'); // produtos | lojas
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // lojas
+  const [newStoreName, setNewStoreName] = useState('');
+  const [storeFormOpen, setStoreFormOpen] = useState(false);
+  const [creatingStore, setCreatingStore] = useState(false);
+  const [editingStoreId, setEditingStoreId] = useState(null);
+  const [editStoreName, setEditStoreName] = useState('');
 
   // novo produto
   const [newName, setNewName] = useState('');
@@ -105,6 +114,7 @@ export default function AdminPage() {
           setPassword(saved);
           setAuthed(true);
           loadProducts();
+          loadStores();
         } else {
           sessionStorage.removeItem('cosechas_admin_pw');
         }
@@ -114,6 +124,16 @@ export default function AdminPage() {
       setChecking(false);
     }
   }, []);
+
+  async function loadStores() {
+    try {
+      const res = await fetch('/api/stores', { cache: 'no-store' });
+      const data = await res.json();
+      setStores(data.stores || []);
+    } catch (e) {
+      /* noop */
+    }
+  }
 
   async function verify(pw) {
     try {
@@ -138,6 +158,7 @@ export default function AdminPage() {
       setAuthed(true);
       sessionStorage.setItem('cosechas_admin_pw', pwInput);
       loadProducts();
+      loadStores();
     } else if (code === 'noenv') {
       setLoginError('A senha de admin não foi definida no servidor (variável ADMIN_PASSWORD).');
     } else if (code === 'neterr') {
@@ -332,6 +353,60 @@ export default function AdminPage() {
     });
   }
 
+  async function createStore(e) {
+    e.preventDefault();
+    const name = newStoreName.trim();
+    if (!name) return;
+    setCreatingStore(true);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        setNewStoreName('');
+        setStoreFormOpen(false);
+        loadStores();
+      } else {
+        alert('Erro ao criar loja.');
+      }
+    } catch (e) {
+      alert('Erro ao criar loja.');
+    } finally {
+      setCreatingStore(false);
+    }
+  }
+
+  function startEditStore(s) {
+    setEditingStoreId(s.id);
+    setEditStoreName(s.name);
+  }
+
+  function cancelEditStore() {
+    setEditingStoreId(null);
+  }
+
+  async function saveEditStore(id) {
+    const name = editStoreName.trim();
+    if (!name) return;
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ id, name }),
+      });
+      if (res.ok) {
+        setEditingStoreId(null);
+        loadStores();
+      } else {
+        alert('Erro ao salvar loja.');
+      }
+    } catch (e) {
+      alert('Erro ao salvar loja.');
+    }
+  }
+
   // ---------- LOGIN ----------
   if (!authed) {
     return (
@@ -427,28 +502,108 @@ export default function AdminPage() {
 
       <main className="wrap">
         <nav className="admin-tabs">
-          <span className="admin-tab active">Produtos</span>
+          <button
+            type="button"
+            className={`admin-tab${view === 'produtos' ? ' active' : ''}`}
+            onClick={() => setView('produtos')}
+          >
+            Produtos
+          </button>
+          <button
+            type="button"
+            className={`admin-tab${view === 'lojas' ? ' active' : ''}`}
+            onClick={() => setView('lojas')}
+          >
+            Lojas
+          </button>
           <Link className="admin-tab" href="/admin/analise">Análise</Link>
         </nav>
 
-        <div className="pills">
-          {STORES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`pill${s.id === storeId ? ' active' : ''}`}
-              onClick={() => setStoreId(s.id)}
-            >
-              {s.emoji} {s.name}
-            </button>
-          ))}
-        </div>
+        {view === 'lojas' ? (
+          <>
+            <div className="section-title">Lojas cadastradas</div>
+            <div className="toolbar">
+              <button className="btn btn-primary btn-sm" onClick={() => setStoreFormOpen((v) => !v)}>
+                {storeFormOpen ? 'Cancelar' : '+ Nova Loja'}
+              </button>
+            </div>
 
-        {loading ? (
-          <div className="spinner">Carregando…</div>
+            {storeFormOpen ? (
+              <form className="add-form" onSubmit={createStore}>
+                <div className="field field-name">
+                  <label>Nome da loja</label>
+                  <input
+                    type="text"
+                    placeholder="Ex.: Copacabana"
+                    value={newStoreName}
+                    onChange={(e) => setNewStoreName(e.target.value)}
+                  />
+                </div>
+                <button className="btn btn-primary" type="submit" disabled={creatingStore}>
+                  {creatingStore ? 'Criando…' : 'Criar'}
+                </button>
+              </form>
+            ) : null}
+
+            {stores.map((s) =>
+              editingStoreId === s.id ? (
+                <div className="padmin editing" key={s.id}>
+                  <div className="edit-grid">
+                    <div className="field field-full">
+                      <label>Nome</label>
+                      <input
+                        type="text"
+                        value={editStoreName}
+                        onChange={(e) => setEditStoreName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="edit-actions">
+                    <button className="btn btn-primary btn-sm" onClick={() => saveEditStore(s.id)}>
+                      Salvar
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={cancelEditStore}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="padmin" key={s.id}>
+                  <div className="info">
+                    <div className="pname">{s.name}</div>
+                    <div className="punit">ID: {s.id}</div>
+                  </div>
+                  <div className="row-actions">
+                    <button className="btn btn-edit btn-sm" onClick={() => startEditStore(s)}>
+                      Editar
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+
+            {stores.length === 0 ? <div className="empty">Nenhuma loja cadastrada.</div> : null}
+          </>
         ) : (
           <>
-            <div className="section-title">O que comprar</div>
+            <div className="pills">
+              {stores.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`pill${s.id === storeId ? ' active' : ''}`}
+                  onClick={() => setStoreId(s.id)}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+
+            {loading ? (
+              <div className="spinner">Carregando…</div>
+            ) : (
+              <>
+                <div className="section-title">O que comprar</div>
             <div className="report">
               <div className="report-head">
                 <h2>Lista de reposição</h2>
@@ -677,6 +832,8 @@ export default function AdminPage() {
             <div className="foot-link">
               <Link href="/">← Ir para a tela de contagem</Link>
             </div>
+              </>
+            )}
           </>
         )}
       </main>

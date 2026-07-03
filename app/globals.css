@@ -379,11 +379,18 @@ tr:last-child td { border-bottom: none; }
 .store-item:active { background: var(--green-050); }
 
 .store-badge {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 8px;
   color: #fff; font-size: 13px; font-weight: 800; font-family: var(--font-display);
   background: rgba(255, 255, 255, 0.14); padding: 7px 12px; border-radius: 999px;
   white-space: nowrap;
 }
+.store-switch-btn {
+  background: none; border: none; padding: 0;
+  color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 700;
+  font-family: var(--font-body); text-decoration: underline;
+  cursor: pointer;
+}
+.store-switch-btn:hover { color: #fff; }
 
 .prow { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .freq-tag {

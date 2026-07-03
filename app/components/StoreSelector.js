@@ -1,8 +1,27 @@
 'use client';
 
-import { STORES } from '../../lib/stores';
+import { useEffect, useState } from 'react';
 
 export default function StoreSelector({ onSelect }) {
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/stores', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setStores(data.stores || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function handleSelect(id) {
     try {
       localStorage.setItem('siembras_store', id);
@@ -30,13 +49,17 @@ export default function StoreSelector({ onSelect }) {
 
       <main className="wrap">
         <div className="section-title">Selecione a loja</div>
-        <div className="store-list">
-          {STORES.map((s) => (
-            <button key={s.id} type="button" className="store-item" onClick={() => handleSelect(s.id)}>
-              {s.name}
-            </button>
-          ))}
-        </div>
+        {loading ? (
+          <div className="spinner">Carregando lojas…</div>
+        ) : (
+          <div className="store-list">
+            {stores.map((s) => (
+              <button key={s.id} type="button" className="store-item" onClick={() => handleSelect(s.id)}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     </>
   );
