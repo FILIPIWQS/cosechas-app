@@ -113,11 +113,10 @@ export default function AdminPage() {
   const [newImage, setNewImage] = useState('');
   const [newFornecedor, setNewFornecedor] = useState('');
   const [newFeira, setNewFeira] = useState(false);
-  const [newParFeira, setNewParFeira] = useState(0);
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', image: '', fornecedor: '', feira: false, parFeira: 0 });
+  const [editData, setEditData] = useState({ name: '', image: '', fornecedor: '', feira: false });
 
   // histórico de contagens (por loja)
   const [logs, setLogs] = useState([]);
@@ -234,7 +233,6 @@ export default function AdminPage() {
         image: newImage.trim(),
         fornecedor: newFornecedor.trim(),
         feira: newFeira,
-        parFeira: newParFeira,
       }),
     });
     if (res.ok) {
@@ -244,7 +242,6 @@ export default function AdminPage() {
       setNewImage('');
       setNewFornecedor('');
       setNewFeira(false);
-      setNewParFeira(0);
       loadStoreProducts();
     }
   }
@@ -256,7 +253,6 @@ export default function AdminPage() {
       image: p.image || '',
       fornecedor: p.fornecedor || '',
       feira: !!p.feira,
-      parFeira: Number(p.parFeira) || 0,
     });
   }
 
@@ -270,13 +266,12 @@ export default function AdminPage() {
     const image = editData.image.trim();
     const fornecedor = editData.fornecedor.trim();
     const feira = !!editData.feira;
-    const parFeira = Math.max(0, parseInt(editData.parFeira, 10) || 0);
-    updateLocal(id, { name, image, fornecedor, feira, parFeira });
+    updateLocal(id, { name, image, fornecedor, feira });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, image, fornecedor, feira, parFeira }),
+      body: JSON.stringify({ id, name, image, fornecedor, feira }),
     });
     loadStoreProducts();
   }
@@ -358,6 +353,17 @@ export default function AdminPage() {
       method: 'PUT',
       headers: storeAuthHeaders(),
       body: JSON.stringify({ id, par: value }),
+    });
+  }
+
+  async function updateParFeira(id, parFeira) {
+    let value = parseInt(parFeira, 10);
+    if (Number.isNaN(value) || value < 0) value = 0;
+    updateStoreLocal(id, { parFeira: value });
+    await fetch('/api/products', {
+      method: 'PUT',
+      headers: storeAuthHeaders(),
+      body: JSON.stringify({ id, parFeira: value }),
     });
   }
 
@@ -750,7 +756,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="par-edit">
-                      <label htmlFor={`par-${p.id}`}>Regulador</label>
+                      <label htmlFor={`par-${p.id}`}>Regulador estoque</label>
                       <input
                         id={`par-${p.id}`}
                         className="par-input"
@@ -761,6 +767,20 @@ export default function AdminPage() {
                         onBlur={(e) => updatePar(p.id, e.target.value)}
                       />
                     </div>
+                    {p.feira ? (
+                      <div className="par-edit">
+                        <label htmlFor={`parfeira-${p.id}`}>🏪 Regulador reabastecimento</label>
+                        <input
+                          id={`parfeira-${p.id}`}
+                          className="par-input"
+                          type="number"
+                          min="0"
+                          defaultValue={Number(p.parFeira) || 0}
+                          key={`parfeira-${p.id}-${p.parFeira}`}
+                          onBlur={(e) => updateParFeira(p.id, e.target.value)}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 ))}
 
@@ -855,17 +875,6 @@ export default function AdminPage() {
                     />
                     <span>🏪 Faz parte do reabastecimento</span>
                   </label>
-                  {newFeira ? (
-                    <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Par de bancada</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newParFeira}
-                        onChange={(e) => setNewParFeira(e.target.value)}
-                      />
-                    </div>
-                  ) : null}
                   <button className="btn btn-primary" type="submit">
                     Adicionar
                   </button>
@@ -914,17 +923,6 @@ export default function AdminPage() {
                           />
                           <span>🏪 Faz parte do reabastecimento</span>
                         </label>
-                        {editData.feira ? (
-                          <div className="field field-full">
-                            <label>Par de bancada</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={editData.parFeira}
-                              onChange={(e) => setEditData({ ...editData, parFeira: e.target.value })}
-                            />
-                          </div>
-                        ) : null}
                       </div>
                       <div className="edit-actions">
                         <button className="btn btn-primary btn-sm" onClick={() => saveEdit(p.id)}>
@@ -945,7 +943,6 @@ export default function AdminPage() {
                         </div>
                         <div className="punit">
                           {p.fornecedor || 'Sem fornecedor'}
-                          {p.feira ? ` · par bancada: ${Number(p.parFeira) || 0}` : ''}
                         </div>
                       </div>
                       <div className="row-actions">

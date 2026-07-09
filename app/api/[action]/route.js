@@ -185,7 +185,6 @@ async function migrateLegacyStoreHash(storeId) {
       fornecedor: p.fornecedor || '',
       frequency: p.frequency || 'diaria',
       feira: !!p.feira,
-      parFeira: Number(p.parFeira) || 0,
       updatedAt: p.updatedAt || now,
     });
     countsFields[id] = JSON.stringify({
@@ -224,7 +223,6 @@ async function ensureCatalog() {
       fornecedor: s.fornecedor || '',
       frequency: 'diaria',
       feira: false,
-      parFeira: 0,
       updatedAt: now,
     };
     fields[p.id] = JSON.stringify(p);
@@ -261,6 +259,18 @@ async function syncSeedIfNeeded(catalog) {
 
 async function getCounts(storeId) {
   const hash = await redis.hgetall(countsKeyFor(storeId));
+  const out = {};
+  if (hash) {
+    for (const [id, raw] of Object.entries(hash)) {
+      const c = parseProduct(raw);
+      if (c) out[id] = c;
+    }
+  }
+  return out;
+}
+
+async function getFeiraCounts(storeId) {
+  const hash = await redis.hgetall(feiraCountsKeyFor(storeId));
   const out = {};
   if (hash) {
     for (const [id, raw] of Object.entries(hash)) {
@@ -314,8 +324,9 @@ async function ensureCurrentDay(storeId) {
   return today;
 }
 
-function mergeProduct(product, countEntry) {
+function mergeProduct(product, countEntry, feiraCountEntry) {
   const c = countEntry || {};
+  const fc = feiraCountEntry || {};
   return {
     id: product.id,
     name: product.name,
@@ -324,7 +335,7 @@ function mergeProduct(product, countEntry) {
     fornecedor: product.fornecedor || '',
     frequency: product.frequency || 'diaria',
     feira: !!product.feira,
-    parFeira: Number(product.parFeira) || 0,
+    parFeira: Number(fc.parFeira) || 0,
     count: Number(c.count) || 0,
     par: Number(c.par) || 0,
     countedToday: !!c.countedToday,
@@ -353,7 +364,8 @@ export async function GET(request, { params }) {
     // Day rollover first, then read (so we always return the post-reset state).
     const countDate = await ensureCurrentDay(storeId);
     const counts = await getCounts(storeId);
-    const products = catalog.map((p) => mergeProduct(p, counts[p.id]));
+    const feiraCounts = await getFeiraCounts(storeId);
+    const products = catalog.map((p) => mergeProduct(p, counts[p.id], feiraCounts[p.id]));
     return Response.json({ products, countDate });
   } catch (e) {
     return Response.json({ error: 'read_failed' }, { status: 500 });
@@ -490,11 +502,10 @@ export async function POST(request, { params }) {
         fornecedor: String(body.fornecedor || '').trim(),
         frequency: freq,
         feira: !!body.feira,
-        parFeira: Math.max(0, Number(body.parFeira) || 0),
         updatedAt: Date.now(),
       };
       await saveCatalogProduct(product);
-      return Response.json({ product: mergeProduct(product, null) });
+      return Response.json({ product: mergeProduct(product, null, null) });
     } catch (e) {
       return Response.json({ error: 'create_failed' }, { status: 500 });
     }
@@ -503,9 +514,9 @@ export async function POST(request, { params }) {
   return Response.json({ error: 'not_found' }, { status: 404 });
 }
 
-// Handles both catalog edits (name/unit/image/fornecedor/frequency, global) and
-// par edits (per store, via x-store-id) — the two admin tabs that write here
-// only ever send the fields relevant to what they're editing.
+// Handles catalog edits (name/unit/image/fornecedor/frequency/feira, global)
+// and per-store par/parFeira edits (via x-store-id) — the admin tabs that
+// write here only ever send the fields relevant to what they're editing.
 export async function PUT(request, { params }) {
   if (params.action !== 'products') return Response.json({ error: 'not_found' }, { status: 404 });
   if (!isAdmin(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -524,15 +535,14 @@ export async function PUT(request, { params }) {
     if (body.fornecedor !== undefined) { p.fornecedor = String(body.fornecedor).trim(); catalogChanged = true; }
     if (body.frequency !== undefined && FREQS.includes(body.frequency)) { p.frequency = body.frequency; catalogChanged = true; }
     if (body.feira !== undefined) { p.feira = !!body.feira; catalogChanged = true; }
-    if (body.parFeira !== undefined) { p.parFeira = Math.max(0, Number(body.parFeira) || 0); catalogChanged = true; }
     if (catalogChanged) {
       p.updatedAt = Date.now();
       await saveCatalogProduct(p);
     }
 
+    const storeId = getStoreId(request);
     let countEntry = null;
     if (body.par !== undefined) {
-      const storeId = getStoreId(request);
       const countsKey = countsKeyFor(storeId);
       const existingRaw = await redis.hget(countsKey, body.id);
       countEntry = existingRaw ? parseProduct(existingRaw) : { count: 0, countedToday: false, lastBy: '', updatedAt: 0, par: 0 };
@@ -541,7 +551,17 @@ export async function PUT(request, { params }) {
       await redis.hset(countsKey, { [body.id]: JSON.stringify(countEntry) });
     }
 
-    return Response.json({ product: mergeProduct(p, countEntry) });
+    let feiraCountEntry = null;
+    if (body.parFeira !== undefined) {
+      const feiraCountsKey = feiraCountsKeyFor(storeId);
+      const existingRaw = await redis.hget(feiraCountsKey, body.id);
+      feiraCountEntry = existingRaw ? parseProduct(existingRaw) : { count: 0, confirmed: false, by: '', updatedAt: 0, parFeira: 0 };
+      feiraCountEntry.parFeira = Math.max(0, Number(body.parFeira) || 0);
+      feiraCountEntry.updatedAt = Date.now();
+      await redis.hset(feiraCountsKey, { [body.id]: JSON.stringify(feiraCountEntry) });
+    }
+
+    return Response.json({ product: mergeProduct(p, countEntry, feiraCountEntry) });
   } catch (e) {
     return Response.json({ error: 'update_failed' }, { status: 500 });
   }

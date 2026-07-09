@@ -54,7 +54,7 @@ function mergeFeiraProduct(product, countEntry) {
     unit: product.unit || '',
     image: product.image || '',
     fornecedor: product.fornecedor || '',
-    parFeira: Number(product.parFeira) || 0,
+    parFeira: Number(c.parFeira) || 0,
     count: Number(c.count) || 0,
     confirmed: !!c.confirmed,
     updatedAt: c.updatedAt || 0,
@@ -81,9 +81,28 @@ export async function POST(request) {
   try {
     const body = await request.json();
 
-    // "Nova contagem de feira": wipes this store's feira counts entirely.
+    // "Nova contagem de feira": zera count/confirmado de cada produto, mas
+    // preserva o regulador (parFeira) já configurado para esta loja.
     if (body.reset === true) {
-      await redis.del(feiraCountsKeyFor(storeId));
+      const feiraCountsKey = feiraCountsKeyFor(storeId);
+      const hash = await redis.hgetall(feiraCountsKey);
+      const now = Date.now();
+      const fields = {};
+      if (hash) {
+        for (const [entryId, raw] of Object.entries(hash)) {
+          const c = parseProduct(raw);
+          if (c) {
+            fields[entryId] = JSON.stringify({
+              count: 0,
+              confirmed: false,
+              by: '',
+              updatedAt: now,
+              parFeira: Number(c.parFeira) || 0,
+            });
+          }
+        }
+      }
+      if (Object.keys(fields).length > 0) await redis.hset(feiraCountsKey, fields);
       return Response.json({ ok: true });
     }
 
@@ -98,8 +117,12 @@ export async function POST(request) {
     const catalogRaw = await redis.hget(GLOBAL_HASH_KEY, id);
     if (!catalogRaw) return Response.json({ error: 'not_found' }, { status: 404 });
 
-    const entry = { count, confirmed, updatedAt: Date.now(), by };
-    await redis.hset(feiraCountsKeyFor(storeId), { [id]: JSON.stringify(entry) });
+    const feiraCountsKey = feiraCountsKeyFor(storeId);
+    const existingRaw = await redis.hget(feiraCountsKey, id);
+    const existing = existingRaw ? parseProduct(existingRaw) : null;
+    const parFeira = existing ? Number(existing.parFeira) || 0 : 0;
+    const entry = { count, confirmed, updatedAt: Date.now(), by, parFeira };
+    await redis.hset(feiraCountsKey, { [id]: JSON.stringify(entry) });
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ error: 'save_failed' }, { status: 500 });
