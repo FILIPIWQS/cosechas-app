@@ -756,7 +756,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="par-edit">
-                      <label htmlFor={`par-${p.id}`}>Regulador estoque</label>
+                      <label htmlFor={`par-${p.id}`}>📦 Regulador Estoque</label>
                       <input
                         id={`par-${p.id}`}
                         className="par-input"
@@ -769,7 +769,7 @@ export default function AdminPage() {
                     </div>
                     {p.feira ? (
                       <div className="par-edit">
-                        <label htmlFor={`parfeira-${p.id}`}>🏪 Regulador reabastecimento</label>
+                        <label htmlFor={`parfeira-${p.id}`}>🏪 Regulador Quiosque</label>
                         <input
                           id={`parfeira-${p.id}`}
                           className="par-input"
