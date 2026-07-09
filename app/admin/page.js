@@ -853,7 +853,7 @@ export default function AdminPage() {
                       checked={newFeira}
                       onChange={(e) => setNewFeira(e.target.checked)}
                     />
-                    <span>🥬 Faz parte da feira</span>
+                    <span>🏪 Faz parte do reabastecimento</span>
                   </label>
                   {newFeira ? (
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -912,7 +912,7 @@ export default function AdminPage() {
                             checked={editData.feira}
                             onChange={(e) => setEditData({ ...editData, feira: e.target.checked })}
                           />
-                          <span>🥬 Faz parte da feira</span>
+                          <span>🏪 Faz parte do reabastecimento</span>
                         </label>
                         {editData.feira ? (
                           <div className="field field-full">
@@ -941,7 +941,7 @@ export default function AdminPage() {
                       <div className="info">
                         <div className="pname">
                           {p.name}
-                          {p.feira ? <span className="feira-tag" title="Faz parte da feira"> 🥬</span> : null}
+                          {p.feira ? <span className="feira-tag" title="Faz parte do reabastecimento"> 🏪</span> : null}
                         </div>
                         <div className="punit">
                           {p.fornecedor || 'Sem fornecedor'}
