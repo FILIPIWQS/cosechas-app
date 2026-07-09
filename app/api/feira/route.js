@@ -56,6 +56,7 @@ function mergeFeiraProduct(product, countEntry) {
     fornecedor: product.fornecedor || '',
     parFeira: Number(product.parFeira) || 0,
     count: Number(c.count) || 0,
+    confirmed: !!c.confirmed,
     updatedAt: c.updatedAt || 0,
     by: c.by || '',
   };
@@ -89,6 +90,7 @@ export async function POST(request) {
     const id = body.id;
     const count = Number(body.count);
     const by = String(body.by || '').trim().slice(0, 40);
+    const confirmed = body.confirmed !== false;
     if (!id) return Response.json({ error: 'id_required' }, { status: 400 });
     if (Number.isNaN(count) || count < 0) {
       return Response.json({ error: 'invalid_count' }, { status: 400 });
@@ -96,7 +98,7 @@ export async function POST(request) {
     const catalogRaw = await redis.hget(GLOBAL_HASH_KEY, id);
     if (!catalogRaw) return Response.json({ error: 'not_found' }, { status: 404 });
 
-    const entry = { count, updatedAt: Date.now(), by };
+    const entry = { count, confirmed, updatedAt: Date.now(), by };
     await redis.hset(feiraCountsKeyFor(storeId), { [id]: JSON.stringify(entry) });
     return Response.json({ ok: true });
   } catch (e) {

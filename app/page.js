@@ -67,7 +67,6 @@ export default function StorePage() {
   const [quiosqueCopied, setQuiosqueCopied] = useState(false);
 
   const timers = useRef({});
-  const feiraTimers = useRef({});
   const productsRef = useRef([]);
   const didFirstReminder = useRef(false);
 
@@ -97,10 +96,8 @@ export default function StorePage() {
     } catch (e) {}
     setStoreChecked(true);
     const t = timers.current;
-    const ft = feiraTimers.current;
     return () => {
       Object.values(t).forEach((id) => clearTimeout(id));
-      Object.values(ft).forEach((id) => clearTimeout(id));
     };
     // eslint-disable-next-line
   }, []);
@@ -361,7 +358,6 @@ export default function StorePage() {
     let count = parseInt(value, 10);
     if (Number.isNaN(count) || count < 0) count = 0;
     setFeiraProducts((prev) => prev.map((p) => (p.id === id ? { ...p, count } : p)));
-    queueFeiraSave(id, count);
   }
 
   function feiraStep(id, delta) {
@@ -370,21 +366,21 @@ export default function StorePage() {
     let count = (Number(p.count) || 0) + delta;
     if (count < 0) count = 0;
     setFeiraProducts((prev) => prev.map((x) => (x.id === id ? { ...x, count } : x)));
-    queueFeiraSave(id, count);
   }
 
-  function queueFeiraSave(id, count) {
-    clearTimeout(feiraTimers.current[id]);
-    feiraTimers.current[id] = setTimeout(() => saveFeiraCount(id, count), 450);
+  function updateFeiraLocal(id, count) {
+    setFeiraProducts((prev) => prev.map((p) => (p.id === id ? { ...p, count, confirmed: true } : p)));
   }
 
-  async function saveFeiraCount(id, count) {
+  async function saveFeiraCount(id, count, confirmed) {
     setSavingFeiraIds((prev) => new Set([...prev, id]));
     try {
+      const body = { id, count, by: collaborator };
+      if (confirmed === false) body.confirmed = false;
       await fetch('/api/feira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
-        body: JSON.stringify({ id, count, by: collaborator }),
+        body: JSON.stringify(body),
       });
       setFeiraSavedId(id);
       setTimeout(() => setFeiraSavedId((s) => (s === id ? null : s)), 1400);
@@ -398,6 +394,20 @@ export default function StorePage() {
     }
   }
 
+  function toggleFeiraConfirm(id) {
+    if (savingFeiraIds.has(id)) return;
+    const p = feiraProducts.find((x) => x.id === id);
+    if (!p) return;
+    if (p.confirmed) {
+      setFeiraProducts((prev) => prev.map((x) => (x.id === id ? { ...x, confirmed: false } : x)));
+      saveFeiraCount(id, Number(p.count) || 0, false);
+    } else {
+      const count = Number(p.count) || 0;
+      updateFeiraLocal(id, count);
+      saveFeiraCount(id, count);
+    }
+  }
+
   async function novaContagemFeira() {
     if (!confirm('Zerar as contagens do quiosque desta loja? Use isto para iniciar uma nova contagem.')) return;
     try {
@@ -406,7 +416,7 @@ export default function StorePage() {
         headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
         body: JSON.stringify({ reset: true }),
       });
-      setFeiraProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
+      setFeiraProducts((prev) => prev.map((p) => ({ ...p, count: 0, confirmed: false })));
       setQuiosqueReportOpen(false);
     } catch (e) {
       alert('Erro ao zerar as contagens do quiosque.');
@@ -767,16 +777,21 @@ export default function StorePage() {
               ) : (
                 visibleFeira.map((p) => {
                     return (
-                      <div className="product" key={p.id}>
+                      <div className={'product' + (p.confirmed ? ' counted' : '')} key={p.id}>
                         {p.image ? <img className="thumb" src={p.image} alt="" /> : null}
                         <div className="info">
                           <div className="pname">{p.name}</div>
                           <div className="prow">
+                            {p.confirmed ? (
+                              <span className="counted-tag">✓ contado</span>
+                            ) : (
+                              <span className="tocount-tag">a contar</span>
+                            )}
                             {feiraSavedId === p.id ? <span className="saved show">✓ salvo</span> : null}
                           </div>
                         </div>
                         <div className="stepper">
-                          <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => feiraStep(p.id, -1)} disabled={!collaborator.trim()}>
+                          <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => feiraStep(p.id, -1)} disabled={p.confirmed || !collaborator.trim()}>
                             −
                           </button>
                           <input
@@ -784,15 +799,23 @@ export default function StorePage() {
                             type="number"
                             inputMode="numeric"
                             min="0"
-                            value={String(Number(p.count) || 0)}
+                            value={p.count > 0 || p.confirmed ? String(Number(p.count) || 0) : ''}
+                            placeholder="–"
                             onChange={(e) => onFeiraInput(p.id, e.target.value)}
                             onFocus={(e) => e.target.select()}
-                            disabled={!collaborator.trim()}
+                            disabled={p.confirmed || !collaborator.trim()}
                           />
-                          <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => feiraStep(p.id, 1)} disabled={!collaborator.trim()}>
+                          <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => feiraStep(p.id, 1)} disabled={p.confirmed || !collaborator.trim()}>
                             +
                           </button>
-                          {savingFeiraIds.has(p.id) ? <span className="step-btn" style={{ background: 'none', border: 'none' }}>⏳</span> : null}
+                          <button
+                            className={'step-btn confirm-btn' + (p.confirmed ? ' confirmed' : '')}
+                            aria-label={p.confirmed ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
+                            onClick={() => toggleFeiraConfirm(p.id)}
+                            disabled={(!collaborator.trim() && !p.confirmed) || savingFeiraIds.has(p.id)}
+                          >
+                            {savingFeiraIds.has(p.id) ? '⏳' : '✓'}
+                          </button>
                         </div>
                       </div>
                     );
