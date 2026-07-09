@@ -112,10 +112,12 @@ export default function AdminPage() {
   const [newName, setNewName] = useState('');
   const [newImage, setNewImage] = useState('');
   const [newFornecedor, setNewFornecedor] = useState('');
+  const [newFeira, setNewFeira] = useState(false);
+  const [newParFeira, setNewParFeira] = useState(0);
 
   // edição de produto
   const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ name: '', image: '', fornecedor: '' });
+  const [editData, setEditData] = useState({ name: '', image: '', fornecedor: '', feira: false, parFeira: 0 });
 
   // histórico de contagens (por loja)
   const [logs, setLogs] = useState([]);
@@ -231,6 +233,8 @@ export default function AdminPage() {
         name,
         image: newImage.trim(),
         fornecedor: newFornecedor.trim(),
+        feira: newFeira,
+        parFeira: newParFeira,
       }),
     });
     if (res.ok) {
@@ -239,6 +243,8 @@ export default function AdminPage() {
       setNewName('');
       setNewImage('');
       setNewFornecedor('');
+      setNewFeira(false);
+      setNewParFeira(0);
       loadStoreProducts();
     }
   }
@@ -249,6 +255,8 @@ export default function AdminPage() {
       name: p.name || '',
       image: p.image || '',
       fornecedor: p.fornecedor || '',
+      feira: !!p.feira,
+      parFeira: Number(p.parFeira) || 0,
     });
   }
 
@@ -261,12 +269,14 @@ export default function AdminPage() {
     if (!name) return;
     const image = editData.image.trim();
     const fornecedor = editData.fornecedor.trim();
-    updateLocal(id, { name, image, fornecedor });
+    const feira = !!editData.feira;
+    const parFeira = Math.max(0, parseInt(editData.parFeira, 10) || 0);
+    updateLocal(id, { name, image, fornecedor, feira, parFeira });
     setEditingId(null);
     await fetch('/api/products', {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ id, name, image, fornecedor }),
+      body: JSON.stringify({ id, name, image, fornecedor, feira, parFeira }),
     });
     loadStoreProducts();
   }
@@ -837,6 +847,25 @@ export default function AdminPage() {
                     />
                   </div>
                   <ImageField label="Foto (opcional)" value={newImage} onChange={setNewImage} />
+                  <label className="field field-feira-toggle" style={{ gridColumn: '1 / -1' }}>
+                    <input
+                      type="checkbox"
+                      checked={newFeira}
+                      onChange={(e) => setNewFeira(e.target.checked)}
+                    />
+                    <span>🥬 Faz parte da feira</span>
+                  </label>
+                  {newFeira ? (
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Par de bancada</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newParFeira}
+                        onChange={(e) => setNewParFeira(e.target.value)}
+                      />
+                    </div>
+                  ) : null}
                   <button className="btn btn-primary" type="submit">
                     Adicionar
                   </button>
@@ -877,6 +906,25 @@ export default function AdminPage() {
                             onChange={(v) => setEditData({ ...editData, image: v })}
                           />
                         </div>
+                        <label className="field field-feira-toggle field-full">
+                          <input
+                            type="checkbox"
+                            checked={editData.feira}
+                            onChange={(e) => setEditData({ ...editData, feira: e.target.checked })}
+                          />
+                          <span>🥬 Faz parte da feira</span>
+                        </label>
+                        {editData.feira ? (
+                          <div className="field field-full">
+                            <label>Par de bancada</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editData.parFeira}
+                              onChange={(e) => setEditData({ ...editData, parFeira: e.target.value })}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                       <div className="edit-actions">
                         <button className="btn btn-primary btn-sm" onClick={() => saveEdit(p.id)}>
@@ -891,9 +939,13 @@ export default function AdminPage() {
                     <div className="padmin" key={p.id}>
                       {p.image ? <img className="thumb thumb-sm" src={p.image} alt="" /> : null}
                       <div className="info">
-                        <div className="pname">{p.name}</div>
+                        <div className="pname">
+                          {p.name}
+                          {p.feira ? <span className="feira-tag" title="Faz parte da feira"> 🥬</span> : null}
+                        </div>
                         <div className="punit">
                           {p.fornecedor || 'Sem fornecedor'}
+                          {p.feira ? ` · par bancada: ${Number(p.parFeira) || 0}` : ''}
                         </div>
                       </div>
                       <div className="row-actions">

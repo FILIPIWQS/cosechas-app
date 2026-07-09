@@ -16,6 +16,10 @@ function countsKeyFor(storeId) { return `siembras:${storeId}:counts`; }
 function logsKeyFor(storeId) { return `siembras:${storeId}:logs`; }
 function dateKeyFor(storeId) { return `siembras:${storeId}:countdate`; }
 
+// Per-store feira (market stall) counts — never resets at midnight, only
+// manually via the "Nova contagem de feira" action.
+function feiraCountsKeyFor(storeId) { return `siembras:${storeId}:feira:counts`; }
+
 // Pre-refactor per-store hash that combined catalog + counts — kept only so the
 // default store's existing data can be migrated once into the new layout.
 function legacyStoreHashKeyFor(storeId) { return `siembras:${storeId}:products:hash`; }
@@ -180,6 +184,8 @@ async function migrateLegacyStoreHash(storeId) {
       image: p.image || '',
       fornecedor: p.fornecedor || '',
       frequency: p.frequency || 'diaria',
+      feira: !!p.feira,
+      parFeira: Number(p.parFeira) || 0,
       updatedAt: p.updatedAt || now,
     });
     countsFields[id] = JSON.stringify({
@@ -217,6 +223,8 @@ async function ensureCatalog() {
       image: s.image || '',
       fornecedor: s.fornecedor || '',
       frequency: 'diaria',
+      feira: false,
+      parFeira: 0,
       updatedAt: now,
     };
     fields[p.id] = JSON.stringify(p);
@@ -315,6 +323,8 @@ function mergeProduct(product, countEntry) {
     image: product.image || '',
     fornecedor: product.fornecedor || '',
     frequency: product.frequency || 'diaria',
+    feira: !!product.feira,
+    parFeira: Number(product.parFeira) || 0,
     count: Number(c.count) || 0,
     par: Number(c.par) || 0,
     countedToday: !!c.countedToday,
@@ -479,6 +489,8 @@ export async function POST(request, { params }) {
         image: String(body.image || '').trim(),
         fornecedor: String(body.fornecedor || '').trim(),
         frequency: freq,
+        feira: !!body.feira,
+        parFeira: Math.max(0, Number(body.parFeira) || 0),
         updatedAt: Date.now(),
       };
       await saveCatalogProduct(product);
@@ -511,6 +523,8 @@ export async function PUT(request, { params }) {
     if (body.image !== undefined) { p.image = String(body.image).trim(); catalogChanged = true; }
     if (body.fornecedor !== undefined) { p.fornecedor = String(body.fornecedor).trim(); catalogChanged = true; }
     if (body.frequency !== undefined && FREQS.includes(body.frequency)) { p.frequency = body.frequency; catalogChanged = true; }
+    if (body.feira !== undefined) { p.feira = !!body.feira; catalogChanged = true; }
+    if (body.parFeira !== undefined) { p.parFeira = Math.max(0, Number(body.parFeira) || 0); catalogChanged = true; }
     if (catalogChanged) {
       p.updatedAt = Date.now();
       await saveCatalogProduct(p);
@@ -545,7 +559,10 @@ export async function DELETE(request, { params }) {
     // Best-effort cleanup of this product's counts entry across every known store.
     try {
       const stores = await getStores();
-      await Promise.all(stores.map((s) => redis.hdel(countsKeyFor(s.id), id)));
+      await Promise.all(stores.map((s) => Promise.all([
+        redis.hdel(countsKeyFor(s.id), id),
+        redis.hdel(feiraCountsKeyFor(s.id), id),
+      ])));
     } catch (e) { /* cleanup is best-effort */ }
     return Response.json({ ok: true });
   } catch (e) {

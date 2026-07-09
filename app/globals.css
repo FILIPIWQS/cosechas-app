@@ -439,6 +439,18 @@ tr:last-child td { border-bottom: none; }
   margin-left: 8px; white-space: nowrap; vertical-align: middle;
 }
 
+/* ---------- Feira ---------- */
+.field-feira-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
+}
+.field-feira-toggle input { width: 18px; height: 18px; accent-color: var(--green); cursor: pointer; }
+.feira-tag { font-size: 14px; }
+.feira-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.feira-summary .feira-headline { font-family: var(--font-display); font-weight: 800; font-size: 16px; }
+
 /* ---------- Botão Finalizar Contagem ---------- */
 .btn-finalizar {
   display: block;

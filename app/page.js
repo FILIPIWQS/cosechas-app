@@ -55,7 +55,19 @@ export default function StorePage() {
   const [sending, setSending] = useState(false);
   const [savingIds, setSavingIds] = useState(new Set());
 
+  const [view, setView] = useState('estoque'); // estoque | feira
+  const [feiraProducts, setFeiraProducts] = useState([]);
+  const [loadingFeira, setLoadingFeira] = useState(false);
+  const [feiraState, setFeiraState] = useState('ok'); // ok | db | error
+  const [feiraLoadedOnce, setFeiraLoadedOnce] = useState(false);
+  const [feiraSearch, setFeiraSearch] = useState('');
+  const [feiraSavedId, setFeiraSavedId] = useState(null);
+  const [savingFeiraIds, setSavingFeiraIds] = useState(new Set());
+  const [quiosqueReportOpen, setQuiosqueReportOpen] = useState(false);
+  const [quiosqueCopied, setQuiosqueCopied] = useState(false);
+
   const timers = useRef({});
+  const feiraTimers = useRef({});
   const productsRef = useRef([]);
   const didFirstReminder = useRef(false);
 
@@ -85,7 +97,11 @@ export default function StorePage() {
     } catch (e) {}
     setStoreChecked(true);
     const t = timers.current;
-    return () => Object.values(t).forEach((id) => clearTimeout(id));
+    const ft = feiraTimers.current;
+    return () => {
+      Object.values(t).forEach((id) => clearTimeout(id));
+      Object.values(ft).forEach((id) => clearTimeout(id));
+    };
     // eslint-disable-next-line
   }, []);
 
@@ -187,6 +203,33 @@ export default function StorePage() {
       setState('error');
     } finally {
       setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (view === 'feira' && storeId) loadFeira();
+    // eslint-disable-next-line
+  }, [view, storeId]);
+
+  async function loadFeira() {
+    setLoadingFeira(true);
+    try {
+      const res = await fetch('/api/feira', {
+        cache: 'no-store',
+        headers: { 'x-store-id': storeIdRef.current },
+      });
+      if (res.status === 503) {
+        setFeiraState('db');
+        return;
+      }
+      const data = await res.json();
+      setFeiraProducts(data.products || []);
+      setFeiraState('ok');
+    } catch (e) {
+      setFeiraState('error');
+    } finally {
+      setLoadingFeira(false);
+      setFeiraLoadedOnce(true);
     }
   }
 
@@ -314,6 +357,78 @@ export default function StorePage() {
     }
   }
 
+  function onFeiraInput(id, value) {
+    let count = parseInt(value, 10);
+    if (Number.isNaN(count) || count < 0) count = 0;
+    setFeiraProducts((prev) => prev.map((p) => (p.id === id ? { ...p, count } : p)));
+    queueFeiraSave(id, count);
+  }
+
+  function feiraStep(id, delta) {
+    const p = feiraProducts.find((x) => x.id === id);
+    if (!p) return;
+    let count = (Number(p.count) || 0) + delta;
+    if (count < 0) count = 0;
+    setFeiraProducts((prev) => prev.map((x) => (x.id === id ? { ...x, count } : x)));
+    queueFeiraSave(id, count);
+  }
+
+  function queueFeiraSave(id, count) {
+    clearTimeout(feiraTimers.current[id]);
+    feiraTimers.current[id] = setTimeout(() => saveFeiraCount(id, count), 450);
+  }
+
+  async function saveFeiraCount(id, count) {
+    setSavingFeiraIds((prev) => new Set([...prev, id]));
+    try {
+      await fetch('/api/feira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
+        body: JSON.stringify({ id, count, by: collaborator }),
+      });
+      setFeiraSavedId(id);
+      setTimeout(() => setFeiraSavedId((s) => (s === id ? null : s)), 1400);
+    } catch (e) {
+    } finally {
+      setSavingFeiraIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  async function novaContagemFeira() {
+    if (!confirm('Zerar as contagens do quiosque desta loja? Use isto para iniciar uma nova contagem.')) return;
+    try {
+      await fetch('/api/feira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
+        body: JSON.stringify({ reset: true }),
+      });
+      setFeiraProducts((prev) => prev.map((p) => ({ ...p, count: 0 })));
+      setQuiosqueReportOpen(false);
+    } catch (e) {
+      alert('Erro ao zerar as contagens do quiosque.');
+    }
+  }
+
+  function finalizarQuiosque() {
+    setQuiosqueReportOpen(true);
+  }
+
+  function copyQuiosqueList() {
+    const lines = ['Buscar no estoque — Reabastecimento Quiosque'];
+    for (const p of feiraNeedsRestockSorted) {
+      const need = Math.max(0, (Number(p.parFeira) || 0) - (Number(p.count) || 0));
+      lines.push(`• ${p.name}: ${need}`);
+    }
+    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
+      setQuiosqueCopied(true);
+      setTimeout(() => setQuiosqueCopied(false), 1600);
+    });
+  }
+
   async function enableNotifications() {
     if (typeof Notification === 'undefined') return;
     try {
@@ -332,6 +447,17 @@ export default function StorePage() {
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
+
+  const feiraNeedsRestock = feiraProducts.filter(
+    (p) => Math.max(0, (Number(p.parFeira) || 0) - (Number(p.count) || 0)) > 0
+  );
+  const feiraNeedsRestockSorted = feiraNeedsRestock
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+  const visibleFeira = feiraProducts
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+    .filter((p) => p.name.toLowerCase().includes(feiraSearch.trim().toLowerCase()));
 
   if (storeChecked && !storeId) {
     return <StoreSelector onSelect={(id) => setStoreId(id)} />;
@@ -368,171 +494,321 @@ export default function StorePage() {
       </header>
 
       <main className="wrap">
-        {loading ? (
-          <div className="spinner">Carregando produtos…</div>
-        ) : state === 'db' ? (
+        <nav className="admin-tabs">
+          <button
+            type="button"
+            className={`admin-tab${view === 'estoque' ? ' active' : ''}`}
+            onClick={() => setView('estoque')}
+          >
+            📦 Estoque
+          </button>
+          <button
+            type="button"
+            className={`admin-tab${view === 'feira' ? ' active' : ''}`}
+            onClick={() => setView('feira')}
+          >
+            🏪 Reabastecimento Quiosque
+          </button>
+        </nav>
+
+        {/* Colaborador (compartilhado entre as abas) */}
+        <div className="panel">
+          <div className="panel-label">Colaborador da contagem</div>
+          <div className="name-row">
+            <span className="name-icon">👤</span>
+            <input
+              className="name-input"
+              type="text"
+              placeholder="Seu nome"
+              value={collaborator}
+              onChange={(e) => onNameChange(e.target.value)}
+            />
+            {nameSaved ? <span className="name-saved">✓ Salvo</span> : null}
+          </div>
+          {!collaborator.trim() ? (
+            <div className="name-required">⚠️ Preencha seu nome para iniciar a contagem</div>
+          ) : null}
+          {notifPerm === 'default' ? (
+            <button className="btn btn-ghost-dark btn-sm notif-btn" onClick={enableNotifications}>
+              🔔 Ativar notificações do navegador (obrigatório para pop-up)
+            </button>
+          ) : notifPerm === 'denied' ? (
+            <div className="notif-hint notif-blocked">
+              🔕 Notificações bloqueadas pelo navegador. Clique no cadeado na barra de endereço → Permissões → Notificações → Permitir.
+            </div>
+          ) : notifPerm === 'granted' ? (
+            <div className="notif-hint ok">🔔 Notificações ativadas — você receberá alertas a cada 5 min.</div>
+          ) : null}
+        </div>
+
+        {view === 'estoque' ? (
+          loading ? (
+            <div className="spinner">Carregando produtos…</div>
+          ) : state === 'db' ? (
+            <div className="notice notice-warn">
+              O banco de dados ainda não foi conectado no Vercel (Storage → Upstash Redis).
+            </div>
+          ) : state === 'error' ? (
+            <div className="notice notice-warn">
+              Não foi possível carregar.{' '}
+              <button className="btn btn-ghost btn-sm" onClick={load}>
+                Tentar de novo
+              </button>
+            </div>
+          ) : (
+            <>
+              {reminderOpen && pendingAll > 0 ? (
+                <div className="reminder reminder-pulse">
+                  <button className="reminder-x" onClick={() => setReminderOpen(false)} aria-label="Fechar">
+                    ×
+                  </button>
+                  <div className="reminder-title">🚨 CONTAGEM PENDENTE!</div>
+                  <div className="reminder-body">
+                    Faltam <strong>{pendingAll} produto{pendingAll > 1 ? 's' : ''}</strong> para contar hoje.
+                    Este aviso repete a cada <strong>5 minutos</strong>.
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Progresso (indicador inteligente) */}
+              <div className="panel">
+                <div className="progress-head">
+                  <span className="panel-label">Progresso da contagem de hoje</span>
+                  <span className={'progress-count' + (complete ? ' done' : '')}>
+                    {complete ? '✓ Concluída' : `${counted} de ${total} (${pct}%)`}
+                  </span>
+                </div>
+                <div className="progress-bar">
+                  <div
+                    className={'progress-fill' + (complete ? ' done' : '')}
+                    style={{ width: pct + '%' }}
+                  />
+                </div>
+                {!complete ? (
+                  <div className="progress-hint">
+                    Toque ou digite o valor de cada produto para marcá-lo como contado.
+                  </div>
+                ) : null}
+              </div>
+
+              {complete ? (
+                <button
+                  className="btn-finalizar"
+                  onClick={finalizarContagem}
+                  disabled={sending}
+                >
+                  {sending ? '⏳ Processando…' : '📲 Finalizar e enviar lista'}
+                </button>
+              ) : null}
+
+              {/* Data */}
+              <div className="date-bar">
+                <span>
+                  Contagem ativa da data: <strong>{formatDate(countDate)}</strong>
+                </span>
+              </div>
+
+              {/* Busca */}
+              <input
+                className="search"
+                type="search"
+                placeholder="🔍 Pesquisar por nome…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+
+              {visible.length === 0 ? (
+                <div className="card empty">
+                  <p>Nenhum produto nesta seção.</p>
+                </div>
+              ) : (
+                visible.map((p) => (
+                  <div className={'product' + (p.countedToday ? ' counted' : '')} key={p.id}>
+                    {p.image ? <img className="thumb" src={p.image} alt="" /> : null}
+                    <div className="info">
+                      <div className="pname">{p.name}</div>
+                      <div className="prow">
+                        {p.countedToday ? (
+                          <span className="counted-tag">✓ contado</span>
+                        ) : (
+                          <span className="tocount-tag">a contar</span>
+                        )}
+                        {savedId === p.id ? <span className="saved show">✓ salvo</span> : null}
+                      </div>
+                    </div>
+                    <div className="stepper">
+                      <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)} disabled={p.countedToday || !collaborator.trim()}>
+                        −
+                      </button>
+                      <input
+                        className="count-input"
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        value={p.count > 0 || p.countedToday ? String(Number(p.count) || 0) : ''}
+                        placeholder="–"
+                        onChange={(e) => onInput(p.id, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        disabled={p.countedToday || !collaborator.trim()}
+                      />
+                      <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)} disabled={p.countedToday || !collaborator.trim()}>
+                        +
+                      </button>
+                      <button
+                        className={'step-btn confirm-btn' + (p.countedToday ? ' confirmed' : '')}
+                        aria-label={p.countedToday ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
+                        onClick={() => toggleConfirm(p.id)}
+                        disabled={(!collaborator.trim() && !p.countedToday) || savingIds.has(p.id)}
+                      >
+                        {savingIds.has(p.id) ? '⏳' : '✓'}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )
+        ) : loadingFeira ? (
+          <div className="spinner">Carregando produtos do quiosque…</div>
+        ) : feiraState === 'db' ? (
           <div className="notice notice-warn">
             O banco de dados ainda não foi conectado no Vercel (Storage → Upstash Redis).
           </div>
-        ) : state === 'error' ? (
+        ) : feiraState === 'error' ? (
           <div className="notice notice-warn">
             Não foi possível carregar.{' '}
-            <button className="btn btn-ghost btn-sm" onClick={load}>
+            <button className="btn btn-ghost btn-sm" onClick={loadFeira}>
               Tentar de novo
             </button>
           </div>
         ) : (
           <>
-            {reminderOpen && pendingAll > 0 ? (
-              <div className="reminder reminder-pulse">
-                <button className="reminder-x" onClick={() => setReminderOpen(false)} aria-label="Fechar">
-                  ×
-                </button>
-                <div className="reminder-title">🚨 CONTAGEM PENDENTE!</div>
-                <div className="reminder-body">
-                  Faltam <strong>{pendingAll} produto{pendingAll > 1 ? 's' : ''}</strong> para contar hoje.
-                  Este aviso repete a cada <strong>5 minutos</strong>.
-                </div>
-              </div>
-            ) : null}
-
-            {/* Colaborador */}
-            <div className="panel">
-              <div className="panel-label">Colaborador da contagem</div>
-              <div className="name-row">
-                <span className="name-icon">👤</span>
-                <input
-                  className="name-input"
-                  type="text"
-                  placeholder="Seu nome"
-                  value={collaborator}
-                  onChange={(e) => onNameChange(e.target.value)}
-                />
-                {nameSaved ? <span className="name-saved">✓ Salvo</span> : null}
-              </div>
-              {!collaborator.trim() ? (
-                <div className="name-required">⚠️ Preencha seu nome para iniciar a contagem</div>
-              ) : null}
-              {notifPerm === 'default' ? (
-                <button className="btn btn-ghost-dark btn-sm notif-btn" onClick={enableNotifications}>
-                  🔔 Ativar notificações do navegador (obrigatório para pop-up)
-                </button>
-              ) : notifPerm === 'denied' ? (
-                <div className="notif-hint notif-blocked">
-                  🔕 Notificações bloqueadas pelo navegador. Clique no cadeado na barra de endereço → Permissões → Notificações → Permitir.
-                </div>
-              ) : notifPerm === 'granted' ? (
-                <div className="notif-hint ok">🔔 Notificações ativadas — você receberá alertas a cada 5 min.</div>
-              ) : null}
-            </div>
-
-            {/* Progresso (indicador inteligente) */}
-            <div className="panel">
-              <div className="progress-head">
-                <span className="panel-label">Progresso da contagem de hoje</span>
-                <span className={'progress-count' + (complete ? ' done' : '')}>
-                  {complete ? '✓ Concluída' : `${counted} de ${total} (${pct}%)`}
-                </span>
-              </div>
-              <div className="progress-bar">
-                <div
-                  className={'progress-fill' + (complete ? ' done' : '')}
-                  style={{ width: pct + '%' }}
-                />
-              </div>
-              {!complete ? (
-                <div className="progress-hint">
-                  Toque ou digite o valor de cada produto para marcá-lo como contado.
-                </div>
-              ) : null}
-            </div>
-
-            {complete ? (
-              <button
-                className="btn-finalizar"
-                onClick={finalizarContagem}
-                disabled={sending}
-              >
-                {sending ? '⏳ Processando…' : '📲 Finalizar e enviar lista'}
-              </button>
-            ) : null}
-
-            {/* Data */}
-            <div className="date-bar">
-              <span>
-                Contagem ativa da data: <strong>{formatDate(countDate)}</strong>
+            {/* Resumo da feira */}
+            <div className="panel feira-summary">
+              <span className="feira-headline">
+                {quiosqueReportOpen
+                  ? feiraNeedsRestock.length > 0
+                    ? feiraNeedsRestock.length > 1
+                      ? `${feiraNeedsRestock.length} produtos precisam ser repostos na bancada`
+                      : '1 produto precisa ser reposto na bancada'
+                    : '✅ QUIOSQUE ABASTECIDO'
+                  : 'Conte os produtos e clique em Finalizar contagem'}
               </span>
+              <button className="btn btn-primary btn-sm" onClick={novaContagemFeira}>
+                Nova contagem
+              </button>
             </div>
+
+            <button className="btn-finalizar" onClick={finalizarQuiosque}>
+              📋 Finalizar contagem
+            </button>
+
+            {quiosqueReportOpen ? (
+              <div className="report" style={{ marginBottom: 14 }}>
+                <div className="report-head">
+                  <h2>Buscar no estoque</h2>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {feiraNeedsRestockSorted.length > 0 ? (
+                      <span className="count-pill">{feiraNeedsRestockSorted.length} item(ns)</span>
+                    ) : null}
+                    <button
+                      className="btn btn-citrus btn-sm"
+                      onClick={copyQuiosqueList}
+                      disabled={feiraNeedsRestockSorted.length === 0}
+                    >
+                      {quiosqueCopied ? '✓ Copiado' : 'Copiar lista'}
+                    </button>
+                  </div>
+                </div>
+                {feiraNeedsRestockSorted.length === 0 ? (
+                  <div className="empty">🎉 Nada a buscar, quiosque abastecido!</div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Produto</th>
+                        <th className="num">Buscar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feiraNeedsRestockSorted.map((p) => (
+                        <tr key={p.id}>
+                          <td>{p.name}</td>
+                          <td className="num">
+                            <span className="buy-qty go">
+                              {Math.max(0, (Number(p.parFeira) || 0) - (Number(p.count) || 0))}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ) : null}
 
             {/* Busca */}
             <input
-              className="search"
-              type="search"
-              placeholder="🔍 Pesquisar por nome…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+                className="search"
+                type="search"
+                placeholder="🔍 Pesquisar por nome…"
+                value={feiraSearch}
+                onChange={(e) => setFeiraSearch(e.target.value)}
+              />
 
-            {visible.length === 0 ? (
-              <div className="card empty">
-                <p>Nenhum produto nesta seção.</p>
-              </div>
-            ) : (
-              visible.map((p) => (
-                <div className={'product' + (p.countedToday ? ' counted' : '')} key={p.id}>
-                  {p.image ? <img className="thumb" src={p.image} alt="" /> : null}
-                  <div className="info">
-                    <div className="pname">{p.name}</div>
-                    <div className="prow">
-                      {p.countedToday ? (
-                        <span className="counted-tag">✓ contado</span>
-                      ) : (
-                        <span className="tocount-tag">a contar</span>
-                      )}
-                      {savedId === p.id ? <span className="saved show">✓ salvo</span> : null}
-                    </div>
-                  </div>
-                  <div className="stepper">
-                    <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => step(p.id, -1)} disabled={p.countedToday || !collaborator.trim()}>
-                      −
-                    </button>
-                    <input
-                      className="count-input"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      value={p.count > 0 || p.countedToday ? String(Number(p.count) || 0) : ''}
-                      placeholder="–"
-                      onChange={(e) => onInput(p.id, e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      disabled={p.countedToday || !collaborator.trim()}
-                    />
-                    <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => step(p.id, 1)} disabled={p.countedToday || !collaborator.trim()}>
-                      +
-                    </button>
-                    <button
-                      className={'step-btn confirm-btn' + (p.countedToday ? ' confirmed' : '')}
-                      aria-label={p.countedToday ? `Desmarcar ${p.name}` : `Confirmar ${p.name}`}
-                      onClick={() => toggleConfirm(p.id)}
-                      disabled={(!collaborator.trim() && !p.countedToday) || savingIds.has(p.id)}
-                    >
-                      {savingIds.has(p.id) ? '⏳' : '✓'}
-                    </button>
-                  </div>
+              {visibleFeira.length === 0 ? (
+                <div className="card empty">
+                  <p>
+                    {feiraProducts.length === 0
+                      ? 'Nenhum produto cadastrado no quiosque ainda.'
+                      : `Nenhum produto encontrado para "${feiraSearch}".`}
+                  </p>
                 </div>
-              ))
-            )}
-
-            <div className="foot-link">
-              <Link href="/admin">Área do administrador →</Link>
-            </div>
-
-            <footer className="footer">
-              <p className="footer-brand">© SIEMBRAS — TODOS OS DIREITOS RESERVADOS</p>
-              <p className="footer-dev">Desenvolvido por <strong>Filipi Fernandes</strong></p>
-            </footer>
+              ) : (
+                visibleFeira.map((p) => {
+                    return (
+                      <div className="product" key={p.id}>
+                        {p.image ? <img className="thumb" src={p.image} alt="" /> : null}
+                        <div className="info">
+                          <div className="pname">{p.name}</div>
+                          <div className="prow">
+                            {feiraSavedId === p.id ? <span className="saved show">✓ salvo</span> : null}
+                          </div>
+                        </div>
+                        <div className="stepper">
+                          <button className="step-btn" aria-label={`Diminuir ${p.name}`} onClick={() => feiraStep(p.id, -1)} disabled={!collaborator.trim()}>
+                            −
+                          </button>
+                          <input
+                            className="count-input"
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            value={String(Number(p.count) || 0)}
+                            onChange={(e) => onFeiraInput(p.id, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            disabled={!collaborator.trim()}
+                          />
+                          <button className="step-btn" aria-label={`Aumentar ${p.name}`} onClick={() => feiraStep(p.id, 1)} disabled={!collaborator.trim()}>
+                            +
+                          </button>
+                          {savingFeiraIds.has(p.id) ? <span className="step-btn" style={{ background: 'none', border: 'none' }}>⏳</span> : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
           </>
         )}
+
+        <div className="foot-link">
+          <Link href="/admin">Área do administrador →</Link>
+        </div>
+
+        <footer className="footer">
+          <p className="footer-brand">© SIEMBRAS — TODOS OS DIREITOS RESERVADOS</p>
+          <p className="footer-dev">Desenvolvido por <strong>Filipi Fernandes</strong></p>
+        </footer>
       </main>
     </>
   );
