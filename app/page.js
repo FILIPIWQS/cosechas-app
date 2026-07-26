@@ -340,13 +340,13 @@ export default function StorePage() {
     }
 
     try {
-      const res = await fetch('/api/send-whatsapp', {
+      const res = await fetch('/api/send-telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-store-id': storeIdRef.current },
         body: JSON.stringify({ message }),
       });
       if (!res.ok) throw new Error('Falha ao enviar');
-      alert('✅ Lista enviada com sucesso via WhatsApp!');
+      alert('✅ Lista enviada com sucesso via Telegram!');
     } catch (e) {
       alert('❌ Erro ao enviar a lista. Tente novamente.');
     } finally {
