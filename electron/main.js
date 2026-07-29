@@ -89,13 +89,27 @@ function criarBandeja() {
 
 // Atualização automática via GitHub Releases — silenciosa de propósito
 // (a loja não precisa saber que existe atualização rodando). Baixa sozinho
-// em segundo plano e só instala na próxima vez que o app fechar de verdade
-// (reinício do Windows ou "Sair" na bandeja), nunca interrompendo quem
-// estiver usando a janela. "error" precisa de listener sempre — sem isso,
-// qualquer falha de rede derruba o processo inteiro.
+// em segundo plano; instala assim que a janela não estiver em uso (minimizada
+// na bandeja), sem depender de alguém fechar o app ou reiniciar o Windows —
+// senão a atualização podia ficar baixada mas nunca aplicada por dias, já
+// que o app normalmente fica só minimizado, não fechado de verdade.
+// "error" precisa de listener sempre — sem isso, qualquer falha de rede
+// (comum: loja sem internet num momento) derruba o processo inteiro.
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.on('error', () => {});
+
+autoUpdater.on('update-downloaded', () => {
+  const instalarAgora = () => {
+    saindoDeVerdade = true;
+    autoUpdater.quitAndInstall(true, true);
+  };
+  if (!janela || !janela.isVisible()) {
+    instalarAgora();
+  } else {
+    janela.once('hide', instalarAgora);
+  }
+});
 
 function iniciarAutoUpdate() {
   if (!app.isPackaged) return; // em dev não existe app-update.yml, checkForUpdates só falharia
