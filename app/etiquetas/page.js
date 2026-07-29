@@ -176,6 +176,17 @@ export default function EtiquetasPage() {
     producaoRef.current = producao;
   }, [producao]);
 
+  // O app fica dias abertos na bandeja sem recarregar a página, então o
+  // valor inicial de hojeISO() (calculado só uma vez, no primeiro carregamento)
+  // fica desatualizado — reabrir a aba de "nova" etiqueta dias depois ainda
+  // mostrava a data antiga em vez da data real de hoje. Recalcula toda vez
+  // que a aba de registro é aberta, pra data de manipulação ser sempre "hoje".
+  useEffect(() => {
+    if (aba === 'nova') setDataManip(hojeISO());
+    else if (aba === 'nova-procedencia') setProcDataManip(hojeISO());
+    else if (aba === 'producao-nova') setProducaoDataManip(hojeISO());
+  }, [aba]);
+
   function precisamTrocar(lista) {
     const hoje = hojeISO();
     return lista.filter((e) => diasEntre(hoje, e.dataValidade) <= DIAS_ALERTA).length;
