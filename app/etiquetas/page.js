@@ -90,6 +90,7 @@ export default function EtiquetasPage() {
   const [procedencias, setProcedencias] = useState([]);
   const [config, setConfig] = useState({ larguraMm: 60, alturaMm: 40, nomeLoja: '' });
   const [loading, setLoading] = useState(true);
+  const [versao, setVersao] = useState('');
 
   const [produtoId, setProdutoId] = useState('');
   const [dias, setDias] = useState('');
@@ -161,6 +162,10 @@ export default function EtiquetasPage() {
 
   useEffect(() => {
     carregarTudo();
+    fetch('/api/etiquetas/versao', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setVersao(d.versao || ''))
+      .catch(() => {});
     // eslint-disable-next-line
   }, []);
 
@@ -1098,6 +1103,9 @@ export default function EtiquetasPage() {
           <span className="logo-wordmark">s<span className="logo-i">i</span>embras</span>
         </div>
         <div className="spacer" />
+        {versao ? (
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', alignSelf: 'center' }}>v{versao}</span>
+        ) : null}
       </header>
 
       <main className="wrap">
