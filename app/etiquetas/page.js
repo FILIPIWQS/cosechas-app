@@ -73,6 +73,15 @@ function diasEntre(isoA, isoB) {
 // Numa troca antecipada, acha a data de validade que o resto do grupo (mesma
 // duração dias-a-dias) já está usando, pra nova etiqueta entrar alinhada em
 // vez de criar uma data só dela — evita o grupo desalinhar com o tempo.
+function formatarNomeProprio(nome) {
+  return String(nome || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((palavra) => palavra[0].toUpperCase() + palavra.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function dataValidadeDoGrupo(listaCompleta, itensSendoTrocados) {
   const duracaoAntiga = diasEntre(itensSendoTrocados[0].dataManipulacao, itensSendoTrocados[0].dataValidade);
   const idsTrocados = new Set(itensSendoTrocados.map((e) => e.id));
@@ -456,7 +465,7 @@ export default function EtiquetasPage() {
           produto: produto.nome,
           dias: diasNum,
           dataManipulacao: dataManip || hojeISO(),
-          colaborador: colaborador.trim(),
+          colaborador: formatarNomeProprio(colaborador),
           dataValidadeGrupo: dataValidadeGrupo || undefined,
         }),
       });
@@ -519,7 +528,7 @@ export default function EtiquetasPage() {
           produto: produto.nome,
           dias: diasNum,
           dataManipulacao: producaoDataManip || hojeISO(),
-          colaborador: producaoColaborador.trim(),
+          colaborador: formatarNomeProprio(producaoColaborador),
         }),
       });
       if (!res.ok) {
@@ -604,12 +613,16 @@ export default function EtiquetasPage() {
     const hoje = hojeISO();
     const novosIds = [];
     for (const item of itens) {
-      const diasOriginal = diasEntre(item.dataManipulacao, item.dataValidade);
+      // Usa os dias atuais do cadastro (produto pode ter sido corrigido desde
+      // a etiqueta antiga); só cai pra duração da etiqueta antiga se o
+      // produto não existir mais no cadastro (ex: foi removido).
+      const produtoAtual = produtos.find((p) => p.nome === item.produto);
+      const dias = produtoAtual ? produtoAtual.dias : diasEntre(item.dataManipulacao, item.dataValidade);
       await fetch(`/api/etiquetas/ativas?id=${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: headers() });
       const res = await fetch('/api/etiquetas/ativas', {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ produto: item.produto, dias: diasOriginal, dataManipulacao: hoje, colaborador }),
+        body: JSON.stringify({ produto: item.produto, dias, dataManipulacao: hoje, colaborador }),
       });
       const data = await res.json();
       if (data.etiqueta) novosIds.push(data.etiqueta.id);
@@ -640,7 +653,7 @@ export default function EtiquetasPage() {
         const res = await fetch('/api/etiquetas/ativas', {
           method: 'POST',
           headers: headers(),
-          body: JSON.stringify({ produto: produto.nome, dias: diasNum, dataManipulacao: dataManip, colaborador: colaborador.trim() }),
+          body: JSON.stringify({ produto: produto.nome, dias: diasNum, dataManipulacao: dataManip, colaborador: formatarNomeProprio(colaborador) }),
         });
         const data = await res.json();
         if (data.etiqueta) novosIds.push(data.etiqueta.id);
@@ -721,7 +734,7 @@ export default function EtiquetasPage() {
           sif: procSif.trim(),
           dataValidadeOriginal: procDataValidadeOriginal.trim(),
           dataManipulacao: procDataManip || hojeISO(),
-          colaborador: procColaborador.trim(),
+          colaborador: formatarNomeProprio(procColaborador),
           dataValidadeGrupo: dataValidadeGrupo || undefined,
         }),
       });
@@ -808,7 +821,7 @@ export default function EtiquetasPage() {
       indice: 0,
       diasNum,
       dataManipulacao: procDataManip,
-      colaborador: procColaborador.trim(),
+      colaborador: formatarNomeProprio(procColaborador),
       novosIds: [],
     });
   }
@@ -880,20 +893,24 @@ export default function EtiquetasPage() {
     const novosIds = [];
     for (const item of itens) {
       const dados = dadosLoteProcedenciaForm[item.id];
-      const diasOriginal = diasEntre(item.dataManipulacao, item.dataValidade);
+      // Mesmo raciocínio da renovação de manipulação: usa os dias atuais do
+      // cadastro, só cai pra duração da etiqueta antiga se o produto não
+      // existir mais no cadastro.
+      const produtoAtual = produtos.find((p) => p.nome === item.produto);
+      const dias = produtoAtual ? produtoAtual.dias : diasEntre(item.dataManipulacao, item.dataValidade);
       await fetch(`/api/etiquetas/procedencias?id=${encodeURIComponent(item.id)}`, { method: 'DELETE', headers: headers() });
       const res = await fetch('/api/etiquetas/procedencias', {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({
           produto: item.produto,
-          dias: diasOriginal,
+          dias,
           dataManipulacao: hoje,
           fornecedor: dados.fornecedor.trim(),
           lote: dados.lote.trim(),
           sif: dados.sif.trim(),
           dataValidadeOriginal: dados.dataValidadeOriginal,
-          colaborador: dados.colaborador.trim(),
+          colaborador: formatarNomeProprio(dados.colaborador),
         }),
       });
       const data = await res.json();
@@ -1204,7 +1221,7 @@ export default function EtiquetasPage() {
                   disabled={!colaboradorLoteInput.trim()}
                   onClick={async () => {
                     const fn = pedirColaboradorLote.aoConfirmar;
-                    const colaborador = colaboradorLoteInput.trim();
+                    const colaborador = formatarNomeProprio(colaboradorLoteInput);
                     setPedirColaboradorLote(null);
                     await fn(colaborador);
                   }}

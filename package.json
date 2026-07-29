@@ -21,7 +21,8 @@
     "publish": {
       "provider": "github",
       "owner": "FILIPIWQS",
-      "repo": "cosechas-app"
+      "repo": "cosechas-app",
+      "draft": false
     },
     "files": [
       ".next/**/*",
